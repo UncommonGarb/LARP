@@ -64,7 +64,7 @@ class CharacterImporter @Inject constructor(
                 data.character_book?.entries?.forEachIndexed { index, entry ->
                     lorebookEntries.add(
                         LorebookEntryEntity(
-                            title = entry.name ?: "Entry \${index + 1}",
+                            title = entry.name ?: "Entry ${index + 1}",
                             keywords = entry.keys.joinToString(","),
                             content = entry.content,
                             insertionOrder = entry.insertion_order,

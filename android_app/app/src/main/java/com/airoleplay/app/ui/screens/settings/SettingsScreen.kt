@@ -256,7 +256,7 @@ fun ConnectionRow(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "\${connection.type} \u00B7 \${connection.baseUrl}",
+                text = "${connection.type} \u00B7 ${connection.baseUrl}",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )

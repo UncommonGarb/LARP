@@ -230,8 +230,8 @@ class ChatViewModel @Inject constructor(
             // Add required Stop Sequences
             val personaName = state.activePersona?.name ?: "User"
             val stopSeqs = listOf(
-                "\$personaName:", "\n\$personaName", "User:", "\nUser",
-                "\${char.name}:", "\n\${char.name}"
+                "$personaName:", "\n$personaName", "User:", "\nUser",
+                "${char.name}:", "\n${char.name}"
             )
             currentGenSettings = currentGenSettings.copy(stopSequences = stopSeqs)
 
@@ -283,7 +283,7 @@ class ChatViewModel @Inject constructor(
              val errorMsg = ChatMessageEntity(
                 sessionId = sessionId,
                 role = "assistant",
-                content = "Error generating response: \${e.message}"
+                content = "Error generating response: ${e.message}"
             )
             chatDao.insertMessage(errorMsg)
         }

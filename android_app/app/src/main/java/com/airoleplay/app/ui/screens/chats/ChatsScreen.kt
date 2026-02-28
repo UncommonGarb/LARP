@@ -99,7 +99,7 @@ fun ChatsScreen(
                             onDismissRequest = { showDeleteDialog = false },
                             containerColor = SurfaceCard,
                             title = { Text("Delete Chat?", color = TextPrimary) },
-                            text = { Text("Are you sure you want to delete this conversation with \${item.character.name}? This cannot be undone.", color = TextSecondary) },
+                            text = { Text("Are you sure you want to delete this conversation with ${item.character.name}? This cannot be undone.", color = TextSecondary) },
                             confirmButton = {
                                 TextButton(onClick = {
                                     viewModel.deleteSession(item.session)
@@ -184,17 +184,17 @@ fun ChatHistoryRow(
             }
 
             Text(
-                text = item.session.title.takeIf { it.isNotBlank() } ?: "Chat \${item.session.id}",
+                text = item.session.title.takeIf { it.isNotBlank() } ?: "Chat ${item.session.id}",
                 style = MaterialTheme.typography.labelMedium,
                 color = AccentColor,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
 
-            val previewPrefix = if (item.lastMessage?.role == "user") "You: " else "\${item.character.name}: "
+            val previewPrefix = if (item.lastMessage?.role == "user") "You: " else "${item.character.name}: "
             val previewText = item.lastMessage?.content ?: "No messages yet."
 
             Text(
-                text = "\$previewPrefix\$previewText",
+                text = "$previewPrefix$previewText",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
                 maxLines = 1

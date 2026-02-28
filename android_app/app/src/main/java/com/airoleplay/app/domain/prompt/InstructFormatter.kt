@@ -21,8 +21,8 @@ object InstructFormatter {
     private fun formatChatML(messages: List<PromptMessage>): String {
         val builder = java.lang.StringBuilder()
         for (message in messages) {
-            builder.append("<|im_start|>\${message.role}\\n")
-            builder.append("\${message.content}<|im_end|>\\n")
+            builder.append("<|im_start|>${message.role}\\n")
+            builder.append("${message.content}<|im_end|>\\n")
         }
         // KoboldCPP needs the assistant token prompt ready to write
         builder.append("<|im_start|>assistant\\n")
@@ -33,9 +33,9 @@ object InstructFormatter {
         val builder = java.lang.StringBuilder()
         for (message in messages) {
             when (message.role) {
-                "system" -> builder.append("\${message.content}\\n\\n")
-                "user" -> builder.append("### Instruction:\\n\${message.content}\\n\\n")
-                "assistant" -> builder.append("### Response:\\n\${message.content}\\n\\n")
+                "system" -> builder.append("${message.content}\\n\\n")
+                "user" -> builder.append("### Instruction:\\n${message.content}\\n\\n")
+                "assistant" -> builder.append("### Response:\\n${message.content}\\n\\n")
             }
         }
         builder.append("### Response:\\n")
@@ -46,8 +46,8 @@ object InstructFormatter {
         val builder = java.lang.StringBuilder()
         builder.append("<|begin_of_text|>")
         for (message in messages) {
-            builder.append("<|start_header_id|>\${message.role}<|end_header_id|>\\n\\n")
-            builder.append("\${message.content}<|eot_id|>")
+            builder.append("<|start_header_id|>${message.role}<|end_header_id|>\\n\\n")
+            builder.append("${message.content}<|eot_id|>")
         }
         builder.append("<|start_header_id|>assistant<|end_header_id|>\\n\\n")
         return builder.toString()
@@ -59,12 +59,12 @@ object InstructFormatter {
 
         for (message in messages) {
             if (message.role == "system") {
-                systemPrompt = "\${message.content}\\n\\n"
+                systemPrompt = "${message.content}\\n\\n"
             } else if (message.role == "user") {
-                builder.append("[INST] \${systemPrompt}\${message.content} [/INST] ")
+                builder.append("[INST] ${systemPrompt}${message.content} [/INST] ")
                 systemPrompt = "" // Only prepend to the first user message
             } else if (message.role == "assistant") {
-                builder.append("\${message.content}\\n")
+                builder.append("${message.content}\\n")
             }
         }
         return builder.toString()
@@ -73,7 +73,7 @@ object InstructFormatter {
     private fun formatRaw(messages: List<PromptMessage>): String {
         val builder = java.lang.StringBuilder()
         for (message in messages) {
-            builder.append("\${message.content}\\n")
+            builder.append("${message.content}\\n")
         }
         return builder.toString()
     }

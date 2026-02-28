@@ -100,7 +100,7 @@ fun ChatScreen(
                             val connStatus = uiState.connectionStatus
                             val modelName = uiState.activeConnection?.modelName ?: "Model"
                             val statusText = when (connStatus) {
-                                ConnectionStatus.CONNECTED -> "Connected \u00B7 \$modelName"
+                                ConnectionStatus.CONNECTED -> "Connected \u00B7 $modelName"
                                     ConnectionStatus.DISCONNECTED -> "Disconnected"
                                     ConnectionStatus.CONNECTING -> "Connecting..."
                                     ConnectionStatus.UNKNOWN -> "Unknown Status"
@@ -397,7 +397,7 @@ fun MessageBubble(
                         }
 
                         Text(
-                            text = "\${currentIndex + 1} / \${alternatives.size}",
+                            text = "${currentIndex + 1} / ${alternatives.size}",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                             modifier = Modifier.padding(horizontal = 8.dp)
