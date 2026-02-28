@@ -29,6 +29,7 @@ import com.airoleplay.app.ui.theme.*
 @Composable
 fun ChatsScreen(
     navController: NavController,
+    contentPadding: PaddingValues = PaddingValues(),
     viewModel: ChatsViewModel = hiltViewModel()
 ) {
     val chatHistory by viewModel.chatHistory.collectAsState()
@@ -51,7 +52,8 @@ fun ChatsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding)
+                    .padding(bottom = contentPadding.calculateBottomPadding()),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -80,7 +82,7 @@ fun ChatsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(bottom = 80.dp) // Bottom nav padding
+                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()) // Use passed padding
             ) {
                 items(chatHistory) { item ->
                     var showDeleteDialog by remember { mutableStateOf(false) }

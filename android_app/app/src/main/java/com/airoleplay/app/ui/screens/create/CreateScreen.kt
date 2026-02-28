@@ -33,6 +33,7 @@ import com.airoleplay.app.ui.theme.*
 @Composable
 fun CreateScreen(
     navController: NavController,
+    contentPadding: PaddingValues = PaddingValues(),
     viewModel: CreateViewModel = hiltViewModel()
 ) {
     val character by viewModel.characterState.collectAsState()
@@ -92,7 +93,8 @@ fun CreateScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(16.dp)
+                .padding(bottom = contentPadding.calculateBottomPadding()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Avatar Selector

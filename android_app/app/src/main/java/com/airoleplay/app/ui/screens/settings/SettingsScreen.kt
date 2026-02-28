@@ -31,6 +31,7 @@ import com.airoleplay.app.ui.theme.*
 @Composable
 fun SettingsScreen(
     navController: NavController,
+    contentPadding: PaddingValues = PaddingValues(),
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val activePersona by viewModel.activePersona.collectAsState()
@@ -50,7 +51,12 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = 16.dp,
+                end = 16.dp,
+                bottom = 16.dp + contentPadding.calculateBottomPadding()
+            ),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // User Persona Section
