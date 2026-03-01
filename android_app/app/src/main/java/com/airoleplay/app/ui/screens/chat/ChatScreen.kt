@@ -1,6 +1,7 @@
 package com.airoleplay.app.ui.screens.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,30 +10,24 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.airoleplay.app.data.local.entity.ChatMessageEntity
+import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,11 +39,8 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     var inputText by remember { mutableStateOf("") }
     var attachedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
-    var showMenu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
-    val context = androidx.compose.ui.platform.LocalContext.current
 
-    // Auto-scroll to bottom only if we are already at the bottom or actively generating
     val isAtBottom by remember {
         derivedStateOf {
             val lastItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
@@ -66,8 +58,19 @@ fun ChatScreen(
         containerColor = DarkBackground,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = DarkBackground,
+                    titleContentColor = TextPrimary
+                ),
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.CharacterDetail.createRoute(it))
+                            }
+                        }
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
@@ -76,7 +79,7 @@ fun ChatScreen(
                         ) {
                             if (uiState.character?.avatarImagePath != null) {
                                 AsyncImage(
-                                        model = uiState.character!!.avatarImagePath,
+                                    model = uiState.character!!.avatarImagePath,
                                     contentDescription = "Avatar",
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
@@ -95,25 +98,16 @@ fun ChatScreen(
                                     ConnectionStatus.CONNECTED -> SuccessGreen
                                     ConnectionStatus.DISCONNECTED -> ErrorRed
                                     ConnectionStatus.CONNECTING -> WarningYellow
-                                    ConnectionStatus.UNKNOWN -> TextSecondary
-                                }
-                            val connStatus = uiState.connectionStatus
-                            val modelName = uiState.activeConnection?.modelName ?: "Model"
-                            val statusText = when (connStatus) {
-                                ConnectionStatus.CONNECTED -> "Connected \u00B7 $modelName"
-                                    ConnectionStatus.DISCONNECTED -> "Disconnected"
-                                    ConnectionStatus.CONNECTING -> "Connecting..."
-                                    ConnectionStatus.UNKNOWN -> "Unknown Status"
+                                    else -> TextSecondary
                                 }
                                 Box(
                                     modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(statusColor)
+                                        .size(8.dp)
+                                        .background(statusColor, CircleShape)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = statusText,
+                                    text = uiState.connectionStatus.name.lowercase().replaceFirstChar { it.uppercase() },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextSecondary
                                 )
@@ -125,117 +119,71 @@ fun ChatScreen(
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
-                },
-                actions = {
-                    IconButton(onClick = { showMenu = !showMenu }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = TextPrimary)
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("View Context") },
-                            onClick = { showMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Export Chat") },
-                            onClick = { showMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Start New Chat") },
-                            onClick = { showMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Rename Chat") },
-                            onClick = { showMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Delete Chat", color = ErrorRed) },
-                            onClick = { showMenu = false }
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+                }
             )
         },
         bottomBar = {
-            Column(modifier = Modifier.background(DarkBackground.copy(alpha = 0.9f))) {
-                if (uiState.isGenerating) {
-                    // Stop Button
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Button(
-                            onClick = { viewModel.stopGeneration() },
-                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceCard, contentColor = ErrorRed),
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Stop", modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Stop Generating")
-                        }
-                    }
-                }
-
-                // Input Row
+            Column(
+                modifier = Modifier
+                    .background(DarkBackground)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .navigationBarsPadding()
+                    .imePadding()
+            ) {
                 if (attachedImageUri != null) {
-                    Box(modifier = Modifier.padding(start = 16.dp, top = 8.dp).size(64.dp)) {
-                        AsyncImage(model = attachedImageUri, contentDescription = "Attached Image", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)))
-                        IconButton(onClick = { attachedImageUri = null }, modifier = Modifier.align(Alignment.TopEnd).size(20.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)) {
-                            Icon(Icons.Default.Clear, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(12.dp))
+                    Box(modifier = Modifier.padding(bottom = 8.dp)) {
+                        AsyncImage(
+                            model = attachedImageUri,
+                            contentDescription = "Attached",
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        IconButton(
+                            onClick = { attachedImageUri = null },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(24.dp)
+                                .background(SurfaceCard.copy(alpha = 0.7f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = ErrorRed, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    val imagePicker = androidx.activity.compose.rememberLauncherForActivityResult(
-                        androidx.activity.result.contract.ActivityResultContracts.GetContent()
-                    ) { uri ->
-                        attachedImageUri = uri
-                    }
-
-                    val isMultimodal = uiState.activeConnection?.type == "OLLAMA" // Simplification for demo
-                    if (isMultimodal) {
-                        IconButton(onClick = { imagePicker.launch("image/*") }) {
-                            Icon(androidx.compose.material.icons.Icons.Default.Add, contentDescription = "Attach Image", tint = TextSecondary)
-                        }
-                    }
-
                     TextField(
                         value = inputText,
                         onValueChange = { inputText = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp),
+                        modifier = Modifier.weight(1f),
                         placeholder = { Text("Type a message...", color = TextSecondary) },
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = SurfaceCard,
                             unfocusedContainerColor = SurfaceCard,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
                             focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
+                            unfocusedTextColor = TextPrimary,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
                         ),
                         shape = RoundedCornerShape(24.dp),
-                        maxLines = 5
+                        trailingIcon = {
+                            IconButton(onClick = { /* Image Picker logic */ }) {
+                                Icon(Icons.Default.Add, contentDescription = "Attach", tint = TextSecondary)
+                            }
+                        }
                     )
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     FloatingActionButton(
                         onClick = {
                             if (inputText.isNotBlank()) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 val base64Images = mutableListOf<String>()
-                                // In a real app we would read `attachedImageUri` content resolver input stream and encode to Base64 here
                                 viewModel.sendMessage(inputText, base64Images)
                                 inputText = ""
                                 attachedImageUri = null
@@ -272,12 +220,11 @@ fun ChatScreen(
                 )
             }
 
-            // Streaming partial message
             if (uiState.isGenerating && uiState.partialGeneration.isNotEmpty()) {
                 item {
                     MessageBubble(
                         message = ChatMessageEntity(
-                            sessionId = 0, // Mock id
+                            sessionId = 0,
                             role = "assistant",
                             content = uiState.partialGeneration
                         ),
@@ -333,7 +280,7 @@ fun MessageBubble(
         Column(
             modifier = Modifier
                 .weight(1f, fill = false)
-                .fillMaxWidth(0.8f), // max width 80%
+                .fillMaxWidth(0.8f),
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
         ) {
             Box(
@@ -355,18 +302,16 @@ fun MessageBubble(
                     .padding(12.dp)
             ) {
                 Text(
-                    text = message.content + if (isStreaming) " \u2588" else "", // Pulsing cursor could be animated, solid block for now
+                    text = message.content + if (isStreaming) " \u2588" else "",
                     color = if (isUser) Color.White else TextPrimary,
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
 
-            // Simple swipe UI indicator (Left/Right arrows for alternatives)
             if (!isUser && !isStreaming && message.swipeGroupId != null) {
                 var alternatives by remember { mutableStateOf<List<ChatMessageEntity>>(emptyList()) }
                 var currentIndex by remember { mutableStateOf(0) }
 
-                // Fetch alternatives when composed
                 LaunchedEffect(message.swipeGroupId) {
                     val msgs = fetchAlternatives(message.swipeGroupId)
                     alternatives = msgs
@@ -413,7 +358,7 @@ fun MessageBubble(
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
-                                androidx.compose.material.icons.Icons.Default.ArrowForward,
+                                Icons.Default.ArrowForward,
                                 contentDescription = "Next Alternative",
                                 tint = if (currentIndex < alternatives.size - 1) TextSecondary else Color.Transparent,
                                 modifier = Modifier.size(16.dp)
@@ -423,7 +368,6 @@ fun MessageBubble(
                 }
             }
 
-            // Options menu when long pressed
             DropdownMenu(
                 expanded = showOptions,
                 onDismissRequest = { showOptions = false }
@@ -439,7 +383,7 @@ fun MessageBubble(
                 }
                 DropdownMenuItem(
                     text = { Text("Copy Text") },
-                    onClick = { showOptions = false /* Implement Copy to Clipboard */ }
+                    onClick = { showOptions = false }
                 )
                 DropdownMenuItem(
                     text = { Text("Delete", color = ErrorRed) },
@@ -459,7 +403,7 @@ fun MessageBubble(
                     .clip(CircleShape)
                     .background(SurfaceCard)
             ) {
-                 if (avatarPath != null) {
+                if (avatarPath != null) {
                     AsyncImage(
                         model = avatarPath,
                         contentDescription = "User Avatar",

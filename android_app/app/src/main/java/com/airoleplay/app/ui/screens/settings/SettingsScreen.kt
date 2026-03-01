@@ -134,6 +134,20 @@ fun SettingsScreen(
                     SettingsNumberRow("Context Limit", "4096")
                 }
             }
+
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "build:a0.01",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+            }
         }
     }
 }
