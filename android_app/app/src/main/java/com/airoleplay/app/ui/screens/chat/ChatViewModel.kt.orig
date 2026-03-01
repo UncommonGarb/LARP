@@ -13,7 +13,6 @@ import com.airoleplay.app.data.local.entity.ChatSessionEntity
 import com.airoleplay.app.data.local.entity.UserPersonaEntity
 import com.airoleplay.app.data.remote.models.GenerationSettings
 import com.airoleplay.app.di.NetworkModule
-import com.airoleplay.app.data.local.entity.LorebookEntryEntity
 import com.airoleplay.app.domain.prompt.InstructFormat
 import com.airoleplay.app.domain.prompt.PromptBuilder
 import com.google.gson.Gson
@@ -33,9 +32,7 @@ data class ChatUiState(
     val partialGeneration: String = "",
     val activeConnection: BackendConnectionEntity? = null,
     val activePersona: UserPersonaEntity? = null,
-    val connectionStatus: ConnectionStatus = ConnectionStatus.UNKNOWN,
-    val currentContextTokens: Int = 0,
-    val maxContextTokens: Int = 4096
+    val connectionStatus: ConnectionStatus = ConnectionStatus.UNKNOWN
 )
 
 enum class ConnectionStatus {
@@ -228,20 +225,14 @@ class ChatViewModel @Inject constructor(
 
         try {
             // Build Prompt
-            val globalSettings = settingsDao.getGlobalSettings().firstOrNull()
-            val globalPrompt = globalSettings?.globalSystemPrompt ?: "You are {{char}}."
             val lorebooks = settingsDao.getLorebookEntriesForCharacter(char.id).firstOrNull() ?: emptyList()
 
             // Add required Stop Sequences
             val personaName = state.activePersona?.name ?: "User"
             val stopSeqs = mutableListOf(
                 "$personaName:", "\n$personaName", "User:", "\nUser",
-                "${char.name}:", "\n${char.name}",
-                "<$personaName>", "</$personaName>",
-                "**$personaName:**", "\n**$personaName**"
+                "${char.name}:", "\n${char.name}"
             )
-
-            _uiState.update { it.copy(maxContextTokens = conn.contextSizeLimit) }
 
             // Add format specific stop sequences
             if (conn.type.uppercase() == "KOBOLDCPP") {
@@ -261,7 +252,7 @@ class ChatViewModel @Inject constructor(
             val promptMessages = promptBuilder.buildPromptMessages(
                 character = char,
                 persona = state.activePersona,
-                globalSystemPrompt = globalPrompt,
+                globalSystemPrompt = "You are {{char}}.", // Would normally come from settings
                 messages = state.messages,
                 lorebookEntries = lorebooks,
                 authorsNote = char.authorsNote,
@@ -279,13 +270,6 @@ class ChatViewModel @Inject constructor(
             } else {
                 requestMessages = promptMessages
             }
-
-            val estimatedTokens = if (promptString != null) {
-                promptString.length / 4
-            } else {
-                requestMessages?.sumOf { it.content.length / 4 } ?: 0
-            }
-            _uiState.update { it.copy(currentContextTokens = estimatedTokens) }
 
             // Start Flow
             generationJob = viewModelScope.launch(Dispatchers.IO) {
@@ -313,8 +297,7 @@ class ChatViewModel @Inject constructor(
              val errorMsg = ChatMessageEntity(
                 sessionId = sessionId,
                 role = "assistant",
-                content = "Connection Error: ${e.message}\nPlease check your backend settings and try again.",
-                isError = true
+                content = "Error generating response: ${e.message}"
             )
             chatDao.insertMessage(errorMsg)
         }
@@ -332,8 +315,6 @@ class ChatViewModel @Inject constructor(
                 swipeGroupId = groupToUse
             )
             chatDao.insertMessage(aiMsg)
-
-            clearAlternativesCache(groupToUse)
 
             // Wait for DB to update and Flow to emit before clearing partial
             // This prevents the visual "pop"
@@ -359,91 +340,6 @@ class ChatViewModel @Inject constructor(
     fun deleteMessage(message: ChatMessageEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             chatDao.deleteMessage(message)
-        }
-    }
-
-    fun editMessage(message: ChatMessageEntity, newContent: String) {
-        if (newContent.isBlank()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val updatedMessage = message.copy(content = newContent)
-            chatDao.updateMessage(updatedMessage)
-
-            // Clear cache if editing an AI message that's part of a swipe group
-            message.swipeGroupId?.let { groupId ->
-                clearAlternativesCache(groupId)
-            }
-        }
-    }
-
-    fun extractMemory() {
-        if (_uiState.value.isGenerating) return
-
-        val state = _uiState.value
-        val char = state.character ?: return
-        val conn = state.activeConnection ?: return
-
-        viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(isGenerating = true, partialGeneration = "[Extracting Memory...]") }
-
-            try {
-                val api = NetworkModule.createBackendAPI(conn.type, conn.baseUrl, okHttpClient, gson)
-
-                // Get the last 20 messages for context
-                val recentMessages = chatDao.getMessagesForSession(sessionId).firstOrNull()?.takeLast(20) ?: emptyList()
-                if (recentMessages.isEmpty()) {
-                    _uiState.update { it.copy(isGenerating = false, partialGeneration = "") }
-                    return@launch
-                }
-
-                val personaName = state.activePersona?.name ?: "User"
-                val conversationText = recentMessages.joinToString("\n") { "${if (it.role == "user") personaName else char.name}: ${it.content}" }
-
-                val promptStr = "Analyze the following conversation and extract ONLY the new, important factual information about the characters (like relationships, birthdays, locations, specific past events mentioned). Format each fact as a bullet point. Do not include opinions or summaries, only facts.\n\nConversation:\n$conversationText\n\nFacts:"
-
-                val promptMessage = com.airoleplay.app.data.remote.models.PromptMessage(role = "user", content = promptStr)
-
-                var requestMessages: List<com.airoleplay.app.data.remote.models.PromptMessage>? = listOf(promptMessage)
-                var rawPromptStr: String? = null
-
-                if (conn.type.uppercase() == "KOBOLDCPP") {
-                    val format = InstructFormat.valueOf(conn.instructFormat.uppercase().replace(" ", ""))
-                    rawPromptStr = com.airoleplay.app.domain.prompt.InstructFormatter.format(requestMessages, format)
-                }
-
-                val settings = currentGenSettings.copy(maxNewTokens = 300, temperature = 0.3f, stopSequences = listOf("<|im_end|>", "<|eot_id|>", "Conversation:"))
-                val flow = api.generateResponse(rawPromptStr, requestMessages, settings)
-
-                var memoryResult = ""
-                flow.collect { chunk ->
-                    memoryResult += chunk
-                }
-
-                if (memoryResult.isNotBlank()) {
-                    // Save as a constant Lorebook entry
-                    val titleText = "Auto-Memory (${java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()).format(java.util.Date())})"
-                    val entry = LorebookEntryEntity(
-                        characterId = char.id,
-                        title = titleText,
-                        keywords = "memory, auto",
-                        content = memoryResult.trim(),
-                        isConstant = true
-                    )
-                    settingsDao.insertLorebookEntry(entry)
-
-                    // Add a system message to chat to notify the user
-                     val systemMsg = ChatMessageEntity(
-                        sessionId = sessionId,
-                        role = "assistant",
-                        content = "[Memory Extracted & Saved to Lorebook]\n$memoryResult"
-                    )
-                    chatDao.insertMessage(systemMsg)
-                }
-
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                _uiState.update { it.copy(isGenerating = false, partialGeneration = "") }
-            }
         }
     }
 

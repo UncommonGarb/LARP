@@ -190,32 +190,6 @@ fun CreateScreen(
                 singleLine = false
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Divider(color = SurfaceCard, modifier = Modifier.padding(vertical = 16.dp))
-
-            Text("Advanced Settings", color = TextPrimary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Start))
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            CreateTextField(
-                label = "System Prompt Override",
-                value = character.systemPromptOverride ?: "",
-                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(systemPromptOverride = newVal) } },
-                singleLine = false,
-                placeholder = "Leave blank to use global default..."
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            CreateTextField(
-                label = "Post-History Instructions",
-                value = character.postHistoryInstructions ?: "",
-                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(postHistoryInstructions = newVal) } },
-                singleLine = false,
-                placeholder = "Always stay in character..."
-            )
-
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -250,14 +224,12 @@ fun CreateTextField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    singleLine: Boolean = true,
-    placeholder: String = ""
+    singleLine: Boolean = true
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
         TextField(
             value = value,
-            placeholder = { Text(placeholder, color = TextSecondary) },
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
             colors = TextFieldDefaults.colors(

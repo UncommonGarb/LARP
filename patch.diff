@@ -1,0 +1,393 @@
+--- android_app/app/src/main/java/com/airoleplay/app/data/local/database/AiRoleplayDatabase.kt
++++ android_app/app/src/main/java/com/airoleplay/app/data/local/database/AiRoleplayDatabase.kt
+@@ -15,6 +15,7 @@
+ import com.airoleplay.app.data.local.entity.ChatSessionEntity
+ import com.airoleplay.app.data.local.entity.LorebookEntryEntity
+ import com.airoleplay.app.data.local.entity.UserPersonaEntity
++import com.airoleplay.app.data.local.entity.GlobalSettingsEntity
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.launch
+@@ -26,9 +27,10 @@
+         ChatMessageEntity::class,
+         LorebookEntryEntity::class,
+         UserPersonaEntity::class,
+-        BackendConnectionEntity::class
++        BackendConnectionEntity::class,
++        GlobalSettingsEntity::class
+     ],
+-    version = 3,
++    version = 5,
+     exportSchema = false
+ )
+ abstract class AiRoleplayDatabase : RoomDatabase() {
+@@ -48,6 +50,18 @@
+                 db.execSQL("ALTER TABLE chat_messages ADD COLUMN attachedImagePath TEXT")
+             }
+         }
++
++        val MIGRATION_3_4 = object : Migration(3, 4) {
++            override fun migrate(db: SupportSQLiteDatabase) {
++                db.execSQL("CREATE TABLE IF NOT EXISTS `global_settings` (`id` INTEGER NOT NULL, `globalSystemPrompt` TEXT NOT NULL, PRIMARY KEY(`id`))")
++            }
++        }
++
++        val MIGRATION_4_5 = object : Migration(4, 5) {
++            override fun migrate(db: SupportSQLiteDatabase) {
++                db.execSQL("ALTER TABLE chat_messages ADD COLUMN isError INTEGER NOT NULL DEFAULT 0")
++            }
++        }
+
+         fun getDatabase(context: Context): AiRoleplayDatabase {
+             return INSTANCE ?: synchronized(this) {
+@@ -56,7 +70,7 @@
+                     AiRoleplayDatabase::class.java,
+                     "ai_roleplay_database"
+                 )
+-                .addMigrations(MIGRATION_2_3)
++                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                 .addCallback(DatabaseCallback(context))
+                 .fallbackToDestructiveMigration()
+                 .build()
+@@ -73,6 +87,9 @@
+         suspend fun prePopulateDatabase(db: AiRoleplayDatabase) {
+             val characterDao = db.characterDao()
+             val settingsDao = db.settingsDao()
++
++            // Default global settings
++            settingsDao.insertGlobalSettings(com.airoleplay.app.data.local.entity.GlobalSettingsEntity())
+
+             // Check if there are any personas, if not add a default "User" persona
+             if (settingsDao.getPersonaCount() == 0) {
+--- android_app/app/src/main/java/com/airoleplay/app/data/local/entity/ChatMessageEntity.kt
++++ android_app/app/src/main/java/com/airoleplay/app/data/local/entity/ChatMessageEntity.kt
+@@ -25,5 +25,6 @@
+     val timestamp: Long = System.currentTimeMillis(),
+     val isActive: Boolean = true, // For swipe/retry functionality
+     val swipeGroupId: String? = null, // Groups alternative responses together
+-    val attachedImagePath: String? = null // Path to attached image for multimodal support
++    val attachedImagePath: String? = null, // Path to attached image for multimodal support
++    val isError: Boolean = false // If true, indicates a failed generation
+ )
+--- android_app/app/src/main/java/com/airoleplay/app/data/local/dao/SettingsDao.kt
++++ android_app/app/src/main/java/com/airoleplay/app/data/local/dao/SettingsDao.kt
+@@ -66,4 +66,11 @@
+
+     @Delete
+     suspend fun deleteLorebookEntry(entry: LorebookEntryEntity)
++
++    // Global Settings
++    @Query("SELECT * FROM global_settings WHERE id = 1")
++    fun getGlobalSettings(): Flow<com.airoleplay.app.data.local.entity.GlobalSettingsEntity?>
++
++    @Insert(onConflict = OnConflictStrategy.REPLACE)
++    suspend fun insertGlobalSettings(settings: com.airoleplay.app.data.local.entity.GlobalSettingsEntity)
+ }
+--- android_app/app/src/main/java/com/airoleplay/app/domain/prompt/PromptBuilder.kt
++++ android_app/app/src/main/java/com/airoleplay/app/domain/prompt/PromptBuilder.kt
+@@ -24,7 +24,8 @@
+         val personaName = persona?.name ?: "User"
+
+         // 1. System Prompt
+-        var systemContent = character.systemPromptOverride ?: globalSystemPrompt
++        val finalGlobalPrompt = if (globalSystemPrompt.isNotBlank()) globalSystemPrompt else "You are {{char}}."
++        var systemContent = character.systemPromptOverride?.takeIf { it.isNotBlank() } ?: finalGlobalPrompt
+         systemContent = replaceMacros(systemContent, character.name, personaName)
+
+         // 2. Character Description
+--- android_app/app/src/main/java/com/airoleplay/app/ui/screens/chat/ChatViewModel.kt
++++ android_app/app/src/main/java/com/airoleplay/app/ui/screens/chat/ChatViewModel.kt
+@@ -13,6 +13,7 @@
+ import com.airoleplay.app.data.local.entity.UserPersonaEntity
+ import com.airoleplay.app.data.remote.models.GenerationSettings
+ import com.airoleplay.app.di.NetworkModule
++import com.airoleplay.app.data.local.entity.LorebookEntryEntity
+ import com.airoleplay.app.domain.prompt.InstructFormat
+ import com.airoleplay.app.domain.prompt.PromptBuilder
+ import com.google.gson.Gson
+@@ -33,7 +34,9 @@
+     val partialGeneration: String = "",
+     val activeConnection: BackendConnectionEntity? = null,
+     val activePersona: UserPersonaEntity? = null,
+-    val connectionStatus: ConnectionStatus = ConnectionStatus.UNKNOWN
++    val connectionStatus: ConnectionStatus = ConnectionStatus.UNKNOWN,
++    val currentContextTokens: Int = 0,
++    val maxContextTokens: Int = 4096
+ )
+
+ enum class ConnectionStatus {
+@@ -226,6 +229,8 @@
+
+         try {
+             // Build Prompt
++            val globalSettings = settingsDao.getGlobalSettings().firstOrNull()
++            val globalPrompt = globalSettings?.globalSystemPrompt ?: "You are {{char}}."
+             val lorebooks = settingsDao.getLorebookEntriesForCharacter(char.id).firstOrNull() ?: emptyList()
+
+             // Add required Stop Sequences
+@@ -233,7 +238,11 @@
+             val stopSeqs = mutableListOf(
+                 "$personaName:", "\n$personaName", "User:", "\nUser",
+-                "${char.name}:", "\n${char.name}"
++                "${char.name}:", "\n${char.name}",
++                "<$personaName>", "</$personaName>",
++                "**$personaName:**", "\n**$personaName**"
+             )
++
++            _uiState.update { it.copy(maxContextTokens = conn.contextSizeLimit) }
+
+             // Add format specific stop sequences
+             if (conn.type.uppercase() == "KOBOLDCPP") {
+@@ -255,7 +264,7 @@
+             val promptMessages = promptBuilder.buildPromptMessages(
+                 character = char,
+                 persona = state.activePersona,
+-                globalSystemPrompt = "You are {{char}}.", // Would normally come from settings
++                globalSystemPrompt = globalPrompt,
+                 messages = state.messages,
+                 lorebookEntries = lorebooks,
+                 authorsNote = char.authorsNote,
+@@ -277,6 +286,13 @@
+             } else {
+                 requestMessages = promptMessages
+             }
++
++            val estimatedTokens = if (promptString != null) {
++                promptString.length / 4
++            } else {
++                requestMessages?.sumOf { it.content.length / 4 } ?: 0
++            }
++            _uiState.update { it.copy(currentContextTokens = estimatedTokens) }
+
+             // Start Flow
+             generationJob = viewModelScope.launch(Dispatchers.IO) {
+@@ -313,7 +329,8 @@
+              val errorMsg = ChatMessageEntity(
+                 sessionId = sessionId,
+                 role = "assistant",
+-                content = "Error generating response: ${e.message}"
++                content = "Connection Error: ${e.message}\nPlease check your backend settings and try again.",
++                isError = true
+             )
+             chatDao.insertMessage(errorMsg)
+         }
+@@ -328,6 +345,8 @@
+                 swipeGroupId = groupToUse
+             )
+             chatDao.insertMessage(aiMsg)
++
++            clearAlternativesCache(groupToUse)
+
+             // Wait for DB to update and Flow to emit before clearing partial
+             // This prevents the visual "pop"
+@@ -358,6 +377,91 @@
+             }
+         }
+     }
++
++    fun editMessage(message: ChatMessageEntity, newContent: String) {
++        if (newContent.isBlank()) return
++        viewModelScope.launch(Dispatchers.IO) {
++            val updatedMessage = message.copy(content = newContent)
++            chatDao.updateMessage(updatedMessage)
++
++            // Clear cache if editing an AI message that's part of a swipe group
++            message.swipeGroupId?.let { groupId ->
++                clearAlternativesCache(groupId)
++            }
++        }
++    }
++
++    fun extractMemory() {
++        if (_uiState.value.isGenerating) return
++
++        val state = _uiState.value
++        val char = state.character ?: return
++        val conn = state.activeConnection ?: return
++
++        viewModelScope.launch(Dispatchers.IO) {
++            _uiState.update { it.copy(isGenerating = true, partialGeneration = "[Extracting Memory...]") }
++
++            try {
++                val api = NetworkModule.createBackendAPI(conn.type, conn.baseUrl, okHttpClient, gson)
++
++                // Get the last 20 messages for context
++                val recentMessages = chatDao.getMessagesForSession(sessionId).firstOrNull()?.takeLast(20) ?: emptyList()
++                if (recentMessages.isEmpty()) {
++                    _uiState.update { it.copy(isGenerating = false, partialGeneration = "") }
++                    return@launch
++                }
++
++                val personaName = state.activePersona?.name ?: "User"
++                val conversationText = recentMessages.joinToString("\n") { "${if (it.role == "user") personaName else char.name}: ${it.content}" }
++
++                val promptStr = "Analyze the following conversation and extract ONLY the new, important factual information about the characters (like relationships, birthdays, locations, specific past events mentioned). Format each fact as a bullet point. Do not include opinions or summaries, only facts.\n\nConversation:\n$conversationText\n\nFacts:"
++
++                val promptMessage = com.airoleplay.app.data.remote.models.PromptMessage(role = "user", content = promptStr)
++
++                var requestMessages: List<com.airoleplay.app.data.remote.models.PromptMessage>? = listOf(promptMessage)
++                var rawPromptStr: String? = null
++
++                if (conn.type.uppercase() == "KOBOLDCPP") {
++                    val format = InstructFormat.valueOf(conn.instructFormat.uppercase().replace(" ", ""))
++                    rawPromptStr = com.airoleplay.app.domain.prompt.InstructFormatter.format(requestMessages, format)
++                }
++
++                val settings = currentGenSettings.copy(maxNewTokens = 300, temperature = 0.3f, stopSequences = listOf("<|im_end|>", "<|eot_id|>", "Conversation:"))
++                val flow = api.generateResponse(rawPromptStr, requestMessages, settings)
++
++                var memoryResult = ""
++                flow.collect { chunk ->
++                    memoryResult += chunk
++                }
++
++                if (memoryResult.isNotBlank()) {
++                    // Save as a constant Lorebook entry
++                    val titleText = "Auto-Memory (${java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()).format(java.util.Date())})"
++                    val entry = LorebookEntryEntity(
++                        characterId = char.id,
++                        title = titleText,
++                        keywords = "memory, auto",
++                        content = memoryResult.trim(),
++                        isConstant = true
++                    )
++                    settingsDao.insertLorebookEntry(entry)
++
++                    // Add a system message to chat to notify the user
++                     val systemMsg = ChatMessageEntity(
++                        sessionId = sessionId,
++                        role = "assistant",
++                        content = "[Memory Extracted & Saved to Lorebook]\n$memoryResult"
++                    )
++                    chatDao.insertMessage(systemMsg)
++                }
++
++            } catch (e: Exception) {
++                e.printStackTrace()
++            } finally {
++                _uiState.update { it.copy(isGenerating = false, partialGeneration = "") }
++            }
++        }
++    }
+
+     override fun onCleared() {
+         super.onCleared()
+--- android_app/app/src/main/java/com/airoleplay/app/ui/screens/settings/GlobalGenerationSettingsScreen.kt
++++ android_app/app/src/main/java/com/airoleplay/app/ui/screens/settings/GlobalGenerationSettingsScreen.kt
+@@ -18,6 +18,8 @@
+     navController: NavController,
+     viewModel: SettingsViewModel = hiltViewModel()
+ ) {
++    val globalSettings by viewModel.globalSettings.collectAsState()
++
+     Scaffold(
+         containerColor = DarkBackground,
+         topBar = {
+@@ -49,6 +51,24 @@
+                     modifier = Modifier.padding(bottom = 8.dp)
+                 )
+             }
++
++            item {
++                Text("Global System Prompt", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
++            }
++            item {
++                OutlinedTextField(
++                    value = globalSettings?.globalSystemPrompt ?: "",
++                    onValueChange = { viewModel.updateGlobalSystemPrompt(it) },
++                    modifier = Modifier.fillMaxWidth().height(150.dp),
++                    colors = OutlinedTextFieldDefaults.colors(
++                        focusedTextColor = TextPrimary,
++                        unfocusedTextColor = TextPrimary,
++                        focusedBorderColor = AccentColor,
++                        unfocusedBorderColor = SurfaceCard
++                    ),
++                    placeholder = { Text("You are {{char}}...", color = TextSecondary) }
++                )
++            }
+             item { SettingsSliderRow("Temperature", 0.8f) }
+             item { SettingsSliderRow("Top-P", 0.9f) }
+             item { SettingsSliderRow("Repetition Penalty", 1.1f) }
+--- android_app/app/src/main/java/com/airoleplay/app/ui/screens/settings/SettingsViewModel.kt
++++ android_app/app/src/main/java/com/airoleplay/app/ui/screens/settings/SettingsViewModel.kt
+@@ -5,6 +5,7 @@
+ import com.airoleplay.app.data.local.dao.SettingsDao
+ import com.airoleplay.app.data.local.entity.BackendConnectionEntity
+ import com.airoleplay.app.data.local.entity.UserPersonaEntity
++import com.airoleplay.app.data.local.entity.GlobalSettingsEntity
+ import com.airoleplay.app.di.NetworkModule
+ import com.google.gson.Gson
+ import dagger.hilt.android.lifecycle.HiltViewModel
+@@ -32,6 +33,9 @@
+     val backendConnections: StateFlow<List<BackendConnectionEntity>> = settingsDao.getAllConnections()
+         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
++    val globalSettings: StateFlow<GlobalSettingsEntity?> = settingsDao.getGlobalSettings()
++        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
++
+     private val _testResult = MutableStateFlow<String?>(null)
+     val testResult = _testResult.asStateFlow()
+
+@@ -69,4 +73,11 @@
+             }
+         }
+     }
++
++    fun updateGlobalSystemPrompt(newPrompt: String) {
++        viewModelScope.launch {
++            val currentSettings = globalSettings.value ?: GlobalSettingsEntity()
++            settingsDao.insertGlobalSettings(currentSettings.copy(globalSystemPrompt = newPrompt))
++        }
++    }
+ }
+--- android_app/app/src/main/java/com/airoleplay/app/ui/screens/create/CreateScreen.kt
++++ android_app/app/src/main/java/com/airoleplay/app/ui/screens/create/CreateScreen.kt
+@@ -190,6 +190,32 @@
+                 singleLine = false
+             )
+
++            Spacer(modifier = Modifier.height(16.dp))
++
++            Divider(color = SurfaceCard, modifier = Modifier.padding(vertical = 16.dp))
++
++            Text("Advanced Settings", color = TextPrimary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Start))
++
++            Spacer(modifier = Modifier.height(16.dp))
++
++            CreateTextField(
++                label = "System Prompt Override",
++                value = character.systemPromptOverride ?: "",
++                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(systemPromptOverride = newVal) } },
++                singleLine = false,
++                placeholder = "Leave blank to use global default..."
++            )
++
++            Spacer(modifier = Modifier.height(16.dp))
++
++            CreateTextField(
++                label = "Post-History Instructions",
++                value = character.postHistoryInstructions ?: "",
++                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(postHistoryInstructions = newVal) } },
++                singleLine = false,
++                placeholder = "Always stay in character..."
++            )
++
+             Spacer(modifier = Modifier.height(32.dp))
+         }
+     }
+@@ -250,12 +276,14 @@
+     label: String,
+     value: String,
+     onValueChange: (String) -> Unit,
+-    singleLine: Boolean = true
++    singleLine: Boolean = true,
++    placeholder: String = ""
+ ) {
+     Column(modifier = Modifier.fillMaxWidth()) {
+         Text(label, style = MaterialTheme.typography.labelMedium, color = TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
+         TextField(
+             value = value,
++            placeholder = { Text(placeholder, color = TextSecondary) },
+             onValueChange = onValueChange,
+             modifier = Modifier.fillMaxWidth(),
+             colors = TextFieldDefaults.colors(

@@ -18,8 +18,6 @@ fun GlobalGenerationSettingsScreen(
     navController: NavController,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val globalSettings by viewModel.globalSettings.collectAsState()
-
     Scaffold(
         containerColor = DarkBackground,
         topBar = {
@@ -47,24 +45,6 @@ fun GlobalGenerationSettingsScreen(
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
-
-            item {
-                Text("Global System Prompt", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
-            }
-            item {
-                OutlinedTextField(
-                    value = globalSettings?.globalSystemPrompt ?: "",
-                    onValueChange = { viewModel.updateGlobalSystemPrompt(it) },
-                    modifier = Modifier.fillMaxWidth().height(150.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        focusedBorderColor = AccentColor,
-                        unfocusedBorderColor = SurfaceCard
-                    ),
-                    placeholder = { Text("You are {{char}}...", color = TextSecondary) }
                 )
             }
             item { SettingsSliderRow("Temperature", 0.8f) }

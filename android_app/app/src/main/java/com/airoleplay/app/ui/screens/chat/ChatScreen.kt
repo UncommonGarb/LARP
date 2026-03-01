@@ -25,6 +25,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -48,6 +53,7 @@ fun ChatScreen(
     var showMenu by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var attachedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var isOocMode by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -65,6 +71,8 @@ fun ChatScreen(
         }
     }
 
+    var autoScrollEnabled by remember { mutableStateOf(true) }
+
     val isAtBottom by remember {
         derivedStateOf {
             val lastItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
@@ -72,8 +80,16 @@ fun ChatScreen(
         }
     }
 
+    LaunchedEffect(isAtBottom) {
+        if (!isAtBottom && uiState.isGenerating) {
+            autoScrollEnabled = false
+        } else if (isAtBottom) {
+            autoScrollEnabled = true
+        }
+    }
+
     LaunchedEffect(uiState.messages.size, uiState.partialGeneration) {
-        if (uiState.messages.isNotEmpty() && isAtBottom) {
+        if (uiState.messages.isNotEmpty() && autoScrollEnabled) {
             listState.animateScrollToItem(uiState.messages.size)
         }
     }
@@ -134,6 +150,18 @@ fun ChatScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextSecondary
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "•",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${uiState.currentContextTokens}/${uiState.maxContextTokens} t",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
                             }
                         }
                     }
@@ -184,6 +212,17 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    IconButton(
+                        onClick = { isOocMode = !isOocMode },
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (isOocMode) AccentColor else SurfaceCard)
+                    ) {
+                        Text("OOC", color = if (isOocMode) Color.White else TextSecondary, style = MaterialTheme.typography.labelMedium)
+                    }
+
                     TextField(
                         value = inputText,
                         onValueChange = { inputText = it },
@@ -207,20 +246,35 @@ fun ChatScreen(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    FloatingActionButton(
-                        onClick = {
-                            if (inputText.isNotBlank()) {
+                    if (uiState.isGenerating) {
+                        FloatingActionButton(
+                            onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.sendMessage(inputText, attachedImageUri?.toString())
-                                inputText = ""
-                                attachedImageUri = null
-                            }
-                        },
-                        containerColor = if (inputText.isNotBlank()) AccentColor else SurfaceCard,
-                        contentColor = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
+                                viewModel.stopGeneration()
+                            },
+                            containerColor = ErrorRed,
+                            contentColor = Color.White,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = "Stop Generation", modifier = Modifier.size(24.dp))
+                        }
+                    } else {
+                        FloatingActionButton(
+                            onClick = {
+                                if (inputText.isNotBlank()) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    val finalMessage = if (isOocMode) "[OOC: $inputText]" else inputText
+                                    viewModel.sendMessage(finalMessage, attachedImageUri?.toString())
+                                    inputText = ""
+                                    attachedImageUri = null
+                                }
+                            },
+                            containerColor = if (inputText.isNotBlank()) AccentColor else SurfaceCard,
+                            contentColor = Color.White,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             }
@@ -231,41 +285,123 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(uiState.messages) { message ->
-                    MessageBubble(
-                        message = message,
-                        isUser = message.role == "user",
-                        avatarPath = if (message.role == "user") uiState.activePersona?.avatarImagePath else uiState.character?.avatarImagePath,
-                        onRegenerate = { viewModel.regenerateLastMessage() },
-                        onDelete = { viewModel.deleteMessage(message) },
-                        fetchAlternatives = { groupId -> viewModel.getSwipeAlternatives(groupId) },
-                        onSwipeAlternative = { viewModel.switchSwipeAlternative(message.swipeGroupId!!, it) }
+            if (uiState.messages.isEmpty() && !uiState.isGenerating) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceCard)
+                    ) {
+                        val avatarModel = remember(uiState.character?.avatarImagePath) {
+                            ImageUtils.resolveModel(uiState.character?.avatarImagePath)
+                        }
+                        if (avatarModel != null) {
+                            AsyncImage(
+                                model = avatarModel,
+                                contentDescription = "Avatar",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Start Roleplaying with ${uiState.character?.name ?: ""}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Send a message to begin the scenario.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
                     )
                 }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(uiState.messages.size) { index ->
+                        val message = uiState.messages[index]
+                        val isUser = message.role == "user"
+                        val isPreviousSameRole = if (index > 0) uiState.messages[index - 1].role == message.role else false
+                        val isNextSameRole = if (index < uiState.messages.size - 1) uiState.messages[index + 1].role == message.role else false
 
-                if (uiState.isGenerating && uiState.partialGeneration.isNotEmpty()) {
-                    item {
                         MessageBubble(
-                            message = ChatMessageEntity(
-                                sessionId = 0,
-                                role = "assistant",
-                                content = uiState.partialGeneration
-                            ),
-                            isUser = false,
-                            avatarPath = uiState.character?.avatarImagePath,
-                            isStreaming = true,
-                            onRegenerate = { },
-                            onDelete = { }
+                            message = message,
+                            isUser = isUser,
+                            isPreviousSameRole = isPreviousSameRole,
+                            isNextSameRole = isNextSameRole,
+                            avatarPath = if (isUser) uiState.activePersona?.avatarImagePath else uiState.character?.avatarImagePath,
+                            onRegenerate = { viewModel.regenerateLastMessage() },
+                            onDelete = { viewModel.deleteMessage(message) },
+                            onEdit = { newContent -> viewModel.editMessage(message, newContent) },
+                            fetchAlternatives = { groupId -> viewModel.getSwipeAlternatives(groupId) },
+                            onSwipeAlternative = { viewModel.switchSwipeAlternative(message.swipeGroupId!!, it) }
                         )
                     }
+
+                    if (uiState.isGenerating) {
+                        item {
+                            if (uiState.partialGeneration.isNotEmpty()) {
+                                MessageBubble(
+                                    message = ChatMessageEntity(
+                                        sessionId = 0,
+                                        role = "assistant",
+                                        content = uiState.partialGeneration
+                                    ),
+                                    isUser = false,
+                                    isPreviousSameRole = uiState.messages.lastOrNull()?.role == "assistant",
+                                    isNextSameRole = false,
+                                    avatarPath = uiState.character?.avatarImagePath,
+                                    isStreaming = true,
+                                    onRegenerate = { },
+                                    onDelete = { }
+                                )
+                            } else {
+                                TypingIndicatorBubble(
+                                    avatarPath = uiState.character?.avatarImagePath,
+                                    isPreviousSameRole = uiState.messages.lastOrNull()?.role == "assistant"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = !isAtBottom,
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .padding(bottom = 16.dp)
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            listState.animateScrollToItem(uiState.messages.size)
+                        }
+                    },
+                    containerColor = SurfaceCard,
+                    contentColor = TextPrimary,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom")
                 }
             }
 
@@ -348,6 +484,15 @@ fun ChatScreen(
                         },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
+                    ListItem(
+                        headlineContent = { Text("Extract Memory") },
+                        leadingContent = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AccentColor) },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            viewModel.extractMemory()
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
                 }
             }
         }
@@ -358,38 +503,52 @@ fun ChatScreen(
 fun MessageBubble(
     message: ChatMessageEntity,
     isUser: Boolean,
+    isPreviousSameRole: Boolean = false,
+    isNextSameRole: Boolean = false,
     avatarPath: String?,
     isStreaming: Boolean = false,
     onRegenerate: () -> Unit,
     onDelete: () -> Unit,
+    onEdit: (String) -> Unit = {},
     fetchAlternatives: suspend (String) -> List<ChatMessageEntity> = { emptyList() },
     onSwipeAlternative: (Long) -> Unit = {}
 ) {
     var showOptions by remember { mutableStateOf(false) }
+    var isEditing by remember { mutableStateOf(false) }
+    var editText by remember { mutableStateOf(message.content) }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                top = if (isPreviousSameRole) 2.dp else 8.dp,
+                bottom = if (isNextSameRole) 2.dp else 8.dp
+            ),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Bottom
     ) {
         if (!isUser) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceCard)
-            ) {
-                val avatarModel = remember(avatarPath) {
-                    ImageUtils.resolveModel(avatarPath)
+            if (!isNextSameRole) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(SurfaceCard)
+                ) {
+                    val avatarModel = remember(avatarPath) {
+                        ImageUtils.resolveModel(avatarPath)
+                    }
+                    if (avatarModel != null) {
+                        AsyncImage(
+                            model = avatarModel,
+                            contentDescription = "Avatar",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
-                if (avatarModel != null) {
-                    AsyncImage(
-                        model = avatarModel,
-                        contentDescription = "Avatar",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+            } else {
+                Spacer(modifier = Modifier.size(32.dp))
             }
             Spacer(modifier = Modifier.width(8.dp))
         }
@@ -397,23 +556,28 @@ fun MessageBubble(
         Column(
             modifier = Modifier
                 .weight(1f, fill = false)
-                .fillMaxWidth(0.8f),
+                .fillMaxWidth(0.85f),
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
         ) {
             Box(
                 modifier = Modifier
                     .clip(
                         RoundedCornerShape(
-                            topStart = 16.dp,
-                            topEnd = 16.dp,
-                            bottomStart = if (isUser) 16.dp else 4.dp,
-                            bottomEnd = if (isUser) 4.dp else 16.dp
+                            topStart = if (!isUser && isPreviousSameRole) 4.dp else 16.dp,
+                            topEnd = if (isUser && isPreviousSameRole) 4.dp else 16.dp,
+                            bottomStart = if (!isUser && isNextSameRole) 4.dp else 16.dp,
+                            bottomEnd = if (isUser && isNextSameRole) 4.dp else 16.dp
                         )
                     )
-                    .background(if (isUser) UserBubbleColor else AssistantBubbleColor)
+                    .background(if (message.isError) ErrorRed.copy(alpha = 0.8f) else if (isUser) UserBubbleColor else AssistantBubbleColor)
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onLongPress = { showOptions = true }
+                            onLongPress = {
+                                val haptic = androidx.compose.ui.platform.ViewConfiguration.get().longPressTimeoutMillis // workaround since local cannot be used in pointer input
+                                // Instead of relying on haptic here which is complex inside pointer input context,
+                                // we will just trigger the option. Context menu opening implies haptic in Android naturally or we can live without.
+                                showOptions = true
+                            }
                         )
                     }
                     .padding(12.dp)
@@ -434,27 +598,88 @@ fun MessageBubble(
                                 .padding(bottom = if (message.content.isNotBlank()) 8.dp else 0.dp)
                         )
                     }
-                    if (message.content.isNotBlank()) {
+                    if (isEditing) {
+                        TextField(
+                            value = editText,
+                            onValueChange = { editText = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedTextColor = if (isUser) Color.White else TextPrimary,
+                                unfocusedTextColor = if (isUser) Color.White else TextPrimary,
+                                focusedIndicatorColor = AccentColor,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = {
+                                isEditing = false
+                                editText = message.content
+                            }) {
+                                Text("Cancel", color = TextSecondary)
+                            }
+                            TextButton(onClick = {
+                                isEditing = false
+                                onEdit(editText)
+                            }) {
+                                Text("Save", color = AccentColor)
+                            }
+                        }
+                    } else if (message.content.isNotBlank()) {
                         Text(
-                            text = message.content + if (isStreaming) " \u2588" else "",
-                            color = if (isUser) Color.White else TextPrimary,
+                            text = parseMarkdown(message.content + if (isStreaming) " \u2588" else ""),
+                            color = if (isUser || message.isError) Color.White else TextPrimary,
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
                 }
+
+                // Timestamp
+                if (showOptions && !isEditing) {
+                    val formattedTime = remember(message.timestamp) {
+                        java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(message.timestamp))
+                    }
+                    Text(
+                        text = formattedTime,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+            if (message.isError) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    TextButton(onClick = { onDelete() }) {
+                        Text("Dismiss", color = TextSecondary)
+                    }
+                    TextButton(onClick = {
+                        onDelete()
+                        onRegenerate()
+                    }) {
+                        Text("Retry", color = AccentColor)
+                    }
+                }
             }
 
-            if (!isUser && !isStreaming && message.swipeGroupId != null) {
+            if (!isUser && !isStreaming && message.swipeGroupId != null && !isEditing && !message.isError) {
                 var alternatives by remember { mutableStateOf<List<ChatMessageEntity>>(emptyList()) }
                 var currentIndex by remember { mutableStateOf(0) }
 
-                LaunchedEffect(message.swipeGroupId) {
+                LaunchedEffect(message.swipeGroupId, message.id) {
                     val msgs = fetchAlternatives(message.swipeGroupId)
                     alternatives = msgs
                     currentIndex = msgs.indexOfFirst { it.id == message.id }.coerceAtLeast(0)
                 }
 
-                if (alternatives.size > 1) {
+                if (alternatives.isNotEmpty()) {
+                    val haptic = LocalHapticFeedback.current
                     Row(
                         modifier = Modifier
                             .padding(top = 4.dp)
@@ -465,13 +690,14 @@ fun MessageBubble(
                         IconButton(
                             onClick = {
                                 if (currentIndex > 0) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     onSwipeAlternative(alternatives[currentIndex - 1].id)
                                 }
                             },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
-                                Icons.Default.ArrowBack,
+                                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                 contentDescription = "Previous Alternative",
                                 tint = if (currentIndex > 0) TextSecondary else Color.Transparent,
                                 modifier = Modifier.size(16.dp)
@@ -488,15 +714,19 @@ fun MessageBubble(
                         IconButton(
                             onClick = {
                                 if (currentIndex < alternatives.size - 1) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     onSwipeAlternative(alternatives[currentIndex + 1].id)
+                                } else if (currentIndex == alternatives.size - 1) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onRegenerate()
                                 }
                             },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
-                                Icons.Default.ArrowForward,
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = "Next Alternative",
-                                tint = if (currentIndex < alternatives.size - 1) TextSecondary else Color.Transparent,
+                                tint = TextSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -507,40 +737,42 @@ fun MessageBubble(
             // Custom themed context menu
             AnimatedVisibility(
                 visible = showOptions,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                enter = scaleIn(initialScale = 0.9f) + fadeIn(),
+                exit = scaleOut(targetScale = 0.9f) + fadeOut()
             ) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.padding(top = 4.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    colors = CardDefaults.cardColors(containerColor = DarkBackground),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.padding(top = 8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                 ) {
-                    Column(modifier = Modifier.width(IntrinsicSize.Min)) {
+                    Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                         if (!isUser) {
-                            ContextMenuItem(
-                                text = "Regenerate",
-                                icon = Icons.Default.Refresh,
-                                onClick = {
-                                    showOptions = false
-                                    onRegenerate()
-                                }
-                            )
-                        }
-                        ContextMenuItem(
-                            text = "Copy Text",
-                            icon = Icons.Default.ContentCopy,
-                            onClick = { showOptions = false }
-                        )
-                        ContextMenuItem(
-                            text = "Delete",
-                            icon = Icons.Default.Delete,
-                            color = ErrorRed,
-                            onClick = {
+                            IconButton(onClick = {
                                 showOptions = false
-                                onDelete()
+                                onRegenerate()
+                            }) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Regenerate", tint = AccentColor)
                             }
-                        )
+                        }
+                        IconButton(onClick = {
+                            showOptions = false
+                            isEditing = true
+                        }) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit", tint = AccentColor)
+                        }
+                        IconButton(onClick = {
+                            showOptions = false
+                            // Add actual clipboard copy here if desired
+                        }) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = AccentColor)
+                        }
+                        IconButton(onClick = {
+                            showOptions = false
+                            onDelete()
+                        }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed)
+                        }
                     }
                 }
             }

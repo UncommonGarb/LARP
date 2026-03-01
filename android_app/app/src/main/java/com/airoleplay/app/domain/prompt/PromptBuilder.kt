@@ -24,7 +24,8 @@ class PromptBuilder @javax.inject.Inject constructor(
         val personaName = persona?.name ?: "User"
 
         // 1. System Prompt
-        var systemContent = character.systemPromptOverride ?: globalSystemPrompt
+        val finalGlobalPrompt = if (globalSystemPrompt.isNotBlank()) globalSystemPrompt else "You are {{char}}."
+        var systemContent = character.systemPromptOverride?.takeIf { it.isNotBlank() } ?: finalGlobalPrompt
         systemContent = replaceMacros(systemContent, character.name, personaName)
 
         // 2. Character Description
