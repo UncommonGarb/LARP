@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.airoleplay.app.data.local.dao.CharacterDao
 import com.airoleplay.app.data.local.dao.ChatDao
@@ -27,7 +28,7 @@ import kotlinx.coroutines.launch
         UserPersonaEntity::class,
         BackendConnectionEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AiRoleplayDatabase : RoomDatabase() {
@@ -40,6 +41,12 @@ abstract class AiRoleplayDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AiRoleplayDatabase? = null
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN attachedImagePath TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): AiRoleplayDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -47,8 +54,9 @@ abstract class AiRoleplayDatabase : RoomDatabase() {
                     AiRoleplayDatabase::class.java,
                     "ai_roleplay_database"
                 )
+                .addMigrations(MIGRATION_2_3)
                 .addCallback(DatabaseCallback(context))
-                .fallbackToDestructiveMigration() // Added since this is pre-release development
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance

@@ -24,5 +24,6 @@ data class ChatMessageEntity(
     val content: String,
     val timestamp: Long = System.currentTimeMillis(),
     val isActive: Boolean = true, // For swipe/retry functionality
-    val swipeGroupId: String? = null // Groups alternative responses together
+    val swipeGroupId: String? = null, // Groups alternative responses together
+    val attachedImagePath: String? = null // Path to attached image for multimodal support
 )

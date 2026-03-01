@@ -27,12 +27,15 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.airoleplay.app.utils.ImageUtils
 import com.airoleplay.app.data.local.entity.ChatMessageEntity
 import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +49,21 @@ fun ChatScreen(
     var inputText by remember { mutableStateOf("") }
     var attachedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val haptic = LocalHapticFeedback.current
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val copiedPath = ImageUtils.copyUriToInternalStorage(context, uri, "attached_${System.currentTimeMillis()}.jpg")
+                if (copiedPath != null) {
+                    attachedImageUri = android.net.Uri.parse("file://$copiedPath")
+                }
+            }
+        }
+    }
 
     val isAtBottom by remember {
         derivedStateOf {
@@ -136,7 +154,11 @@ fun ChatScreen(
                     .imePadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                if (attachedImageUri != null) {
+                AnimatedVisibility(
+                    visible = attachedImageUri != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
                     Box(modifier = Modifier.padding(bottom = 8.dp)) {
                         AsyncImage(
                             model = attachedImageUri,
@@ -177,7 +199,7 @@ fun ChatScreen(
                         ),
                         shape = RoundedCornerShape(24.dp),
                         trailingIcon = {
-                            IconButton(onClick = { /* Image Picker logic */ }) {
+                            IconButton(onClick = { imagePickerLauncher.launch("image/*") }) {
                                 Icon(Icons.Default.Add, contentDescription = "Attach", tint = TextSecondary)
                             }
                         }
@@ -189,8 +211,7 @@ fun ChatScreen(
                         onClick = {
                             if (inputText.isNotBlank()) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                val base64Images = mutableListOf<String>()
-                                viewModel.sendMessage(inputText, base64Images)
+                                viewModel.sendMessage(inputText, attachedImageUri?.toString())
                                 inputText = ""
                                 attachedImageUri = null
                             }
@@ -397,11 +418,30 @@ fun MessageBubble(
                     }
                     .padding(12.dp)
             ) {
-                Text(
-                    text = message.content + if (isStreaming) " \u2588" else "",
-                    color = if (isUser) Color.White else TextPrimary,
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Column {
+                    if (message.attachedImagePath != null) {
+                        val attachedModel = remember(message.attachedImagePath) {
+                            ImageUtils.resolveModel(message.attachedImagePath)
+                        }
+                        AsyncImage(
+                            model = attachedModel,
+                            contentDescription = "Attached Image",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .padding(bottom = if (message.content.isNotBlank()) 8.dp else 0.dp)
+                        )
+                    }
+                    if (message.content.isNotBlank()) {
+                        Text(
+                            text = message.content + if (isStreaming) " \u2588" else "",
+                            color = if (isUser) Color.White else TextPrimary,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
             }
 
             if (!isUser && !isStreaming && message.swipeGroupId != null) {
