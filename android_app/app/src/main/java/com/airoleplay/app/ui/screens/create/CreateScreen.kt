@@ -1,10 +1,6 @@
 package com.airoleplay.app.ui.screens.create
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,9 +8,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,224 +28,157 @@ import com.airoleplay.app.ui.theme.*
 @Composable
 fun CreateScreen(
     navController: NavController,
-    contentPadding: PaddingValues = PaddingValues(),
     viewModel: CreateViewModel = hiltViewModel()
 ) {
     val character by viewModel.characterState.collectAsState()
-    val avatarUri by viewModel.avatarUri.collectAsState()
-    val isSaving by viewModel.isSaving.collectAsState()
-
-    var showAdvanced by remember { mutableStateOf(false) }
-
-    val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        viewModel.updateAvatarUri(uri)
-    }
+    val scrollState = rememberScrollState()
 
     Scaffold(
         containerColor = DarkBackground,
         topBar = {
             TopAppBar(
-                title = { Text("Create Character", color = TextPrimary) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = DarkBackground,
+                    titleContentColor = TextPrimary
+                ),
+                title = { Text(if (character.id == 0L) "Create Character" else "Edit Character") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
-                },
-                actions = {
-                    TextButton(onClick = {
-                        viewModel.saveCharacter { savedId ->
-                            navController.popBackStack() // Or navigate to detail
-                        }
-                    }) {
-                        Text("Save", color = AccentColor, fontWeight = FontWeight.Bold)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    viewModel.saveCharacter {
-                        navController.popBackStack()
-                    }
-                },
-                containerColor = AccentColor,
-                contentColor = Color.White
-            ) {
-                if (isSaving) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                } else {
-                    Icon(Icons.Default.Check, "Save")
                 }
-            }
+            )
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-                .padding(bottom = contentPadding.calculateBottomPadding()),
+                .verticalScroll(scrollState)
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Avatar Selector
+            // Avatar picker
             Box(
                 modifier = Modifier
                     .size(100.dp)
                     .clip(CircleShape)
                     .background(SurfaceCard)
-                    .border(2.dp, AccentColor, CircleShape)
-                    .clickable { imagePicker.launch("image/*") },
-                contentAlignment = Alignment.Center
+                    .clickable { /* Image picker */ }
             ) {
-                if (avatarUri != null) {
+                if (character.avatarImagePath != null) {
                     AsyncImage(
-                        model = avatarUri,
+                        model = character.avatarImagePath,
                         contentDescription = "Avatar",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                } else {
-                    Icon(Icons.Default.Add, contentDescription = "Add Avatar", tint = TextSecondary, modifier = Modifier.size(32.dp))
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .background(AccentColor, CircleShape)
+                        .padding(4.dp)
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color.White, modifier = Modifier.size(16.dp))
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Form Fields
-            FormSection(
+            CreateTextField(
                 label = "Name",
                 value = character.name,
-                onValueChange = { viewModel.updateField(name = it) },
-                singleLine = true
+                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(name = newVal) } }
             )
 
-            FormSection(
-                label = "Description",
-                subtitle = "Who are they? Background, appearance, how they speak and think.",
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CreateTextField(
+                label = "Description / Physical Appearance",
                 value = character.description,
-                onValueChange = { viewModel.updateField(description = it) },
-                singleLine = false,
-                minLines = 4
+                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(description = newVal) } },
+                singleLine = false
             )
 
-            FormSection(
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CreateTextField(
                 label = "Personality Summary",
-                subtitle = "A short summary of key traits. e.g. 'Sarcastic, clever, secretly kind-hearted.'",
                 value = character.personalitySummary,
-                onValueChange = { viewModel.updateField(personalitySummary = it) },
-                singleLine = false,
-                minLines = 2
+                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(personalitySummary = newVal) } },
+                singleLine = false
             )
 
-            FormSection(
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CreateTextField(
                 label = "Scenario",
-                subtitle = "The setting or context. Where are you meeting?",
                 value = character.scenario,
-                onValueChange = { viewModel.updateField(scenario = it) },
-                singleLine = false,
-                minLines = 3
+                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(scenario = newVal) } },
+                singleLine = false
             )
 
-            FormSection(
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CreateTextField(
                 label = "First Message",
-                subtitle = "What does your character say when the chat begins?",
                 value = character.firstMessage,
-                onValueChange = { viewModel.updateField(firstMessage = it) },
-                singleLine = false,
-                minLines = 3
+                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(firstMessage = newVal) } },
+                singleLine = false
             )
 
-            FormSection(
-                label = "Example Dialogues",
-                subtitle = "Write a few back-and-forth exchanges.",
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CreateTextField(
+                label = "Example Dialogue",
                 value = character.exampleDialogue,
-                onValueChange = { viewModel.updateField(exampleDialogue = it) },
-                singleLine = false,
-                minLines = 4
+                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(exampleDialogue = newVal) } },
+                singleLine = false
             )
 
-            // Advanced Section Toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showAdvanced = !showAdvanced }
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Button(
+                onClick = {
+                    viewModel.saveCharacter {
+                        navController.popBackStack()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Advanced Settings", color = AccentColor, fontWeight = FontWeight.Bold)
-                // Icon for expand/collapse would go here
+                Text("Save Character", color = Color.White, fontWeight = FontWeight.Bold)
             }
-
-            if (showAdvanced) {
-                FormSection(
-                    label = "Tags",
-                    subtitle = "Comma separated tags (e.g. fantasy, shy, female)",
-                    value = character.tags,
-                    onValueChange = { viewModel.updateField(tags = it) },
-                    singleLine = true
-                )
-
-                FormSection(
-                    label = "Custom System Prompt",
-                    subtitle = "Replaces global system prompt.",
-                    value = character.systemPromptOverride ?: "",
-                    onValueChange = { viewModel.updateField(systemPromptOverride = it) },
-                    singleLine = false,
-                    minLines = 3
-                )
-
-                FormSection(
-                    label = "Post-History Instructions",
-                    subtitle = "Injected at the very end of every prompt.",
-                    value = character.postHistoryInstructions ?: "",
-                    onValueChange = { viewModel.updateField(postHistoryInstructions = it) },
-                    singleLine = false,
-                    minLines = 3
-                )
-            }
-
-            Spacer(modifier = Modifier.height(100.dp)) // Fab padding
         }
     }
 }
 
 @Composable
-fun FormSection(
+fun CreateTextField(
     label: String,
-    subtitle: String? = null,
     value: String,
     onValueChange: (String) -> Unit,
-    singleLine: Boolean = false,
-    minLines: Int = 1
+    singleLine: Boolean = true
 ) {
-    Column(modifier = Modifier
-        .fillMaxWidth()
-        .padding(bottom = 16.dp)) {
-        Text(text = label, style = MaterialTheme.typography.labelMedium, color = AccentColor)
-        if (subtitle != null) {
-            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
-        }
-        OutlinedTextField(
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = TextSecondary, modifier = Modifier.padding(bottom = 4.dp))
+        TextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
-            singleLine = singleLine,
-            minLines = minLines,
-            colors = OutlinedTextFieldDefaults.colors(
+            colors = TextFieldDefaults.colors(
                 focusedContainerColor = SurfaceCard,
                 unfocusedContainerColor = SurfaceCard,
-                focusedBorderColor = AccentColor,
-                unfocusedBorderColor = Color.Transparent,
                 focusedTextColor = TextPrimary,
-                unfocusedTextColor = TextPrimary
+                unfocusedTextColor = TextPrimary,
+                focusedIndicatorColor = AccentColor,
+                unfocusedIndicatorColor = Color.Transparent
             ),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(8.dp),
+            singleLine = singleLine,
+            minLines = if (singleLine) 1 else 3
         )
     }
 }

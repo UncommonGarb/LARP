@@ -42,7 +42,7 @@ fun AppNavGraph() {
         Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
-                startDestination = Screen.Onboarding.route // Start at onboarding, it can auto-navigate if not first launch
+                startDestination = Screen.Onboarding.route
             ) {
                 composable(Screen.Onboarding.route) {
                     com.airoleplay.app.ui.screens.onboarding.OnboardingScreen(navController)
@@ -54,7 +54,7 @@ fun AppNavGraph() {
                     ChatsScreen(navController, innerPadding)
                 }
                 composable(Screen.Create.route) {
-                    CreateScreen(navController, innerPadding)
+                    CreateScreen(navController)
                 }
                 composable(Screen.Settings.route) {
                     SettingsScreen(navController, innerPadding)

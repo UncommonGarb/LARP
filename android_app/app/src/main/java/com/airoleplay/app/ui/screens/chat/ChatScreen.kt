@@ -333,7 +333,8 @@ fun MessageBubble(
         Column(
             modifier = Modifier
                 .weight(1f, fill = false)
-                .fillMaxWidth(0.8f) // max width 80%
+                .fillMaxWidth(0.8f), // max width 80%
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
         ) {
             Box(
                 modifier = Modifier
