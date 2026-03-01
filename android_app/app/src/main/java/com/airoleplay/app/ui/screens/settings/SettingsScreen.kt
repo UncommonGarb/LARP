@@ -31,6 +31,7 @@ import com.airoleplay.app.ui.theme.*
 @Composable
 fun SettingsScreen(
     navController: NavController,
+    contentPadding: PaddingValues = PaddingValues(),
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val activePersona by viewModel.activePersona.collectAsState()
@@ -50,7 +51,12 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = 16.dp,
+                end = 16.dp,
+                bottom = 16.dp + contentPadding.calculateBottomPadding()
+            ),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // User Persona Section
@@ -126,6 +132,20 @@ fun SettingsScreen(
                     SettingsSliderRow("Repetition Penalty", 1.1f)
                     SettingsNumberRow("Max New Tokens", "400")
                     SettingsNumberRow("Context Limit", "4096")
+                }
+            }
+
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "build:a0.01",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
                 }
             }
         }
@@ -250,7 +270,7 @@ fun ConnectionRow(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "\${connection.type} \u00B7 \${connection.baseUrl}",
+                text = "${connection.type} \u00B7 ${connection.baseUrl}",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )

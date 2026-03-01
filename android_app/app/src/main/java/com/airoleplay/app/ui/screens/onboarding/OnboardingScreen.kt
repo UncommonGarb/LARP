@@ -23,6 +23,16 @@ fun OnboardingScreen(
     navController: NavController,
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
+    val isOnboarded by viewModel.isOnboarded.collectAsState()
+
+    LaunchedEffect(isOnboarded) {
+        if (isOnboarded) {
+            navController.navigate(Screen.Discover.route) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
+
     var step by remember { mutableStateOf(1) }
     var baseUrl by remember { mutableStateOf("http://192.168.1.100:11434") }
     var type by remember { mutableStateOf("OLLAMA") }

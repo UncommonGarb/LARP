@@ -34,6 +34,7 @@ import com.airoleplay.app.ui.theme.*
 @Composable
 fun DiscoverScreen(
     navController: NavController,
+    contentPadding: PaddingValues = PaddingValues(),
     viewModel: DiscoverViewModel = hiltViewModel()
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -57,6 +58,7 @@ fun DiscoverScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .padding(bottom = contentPadding.calculateBottomPadding())
         ) {
             // Tags Filter Row
             LazyRow(

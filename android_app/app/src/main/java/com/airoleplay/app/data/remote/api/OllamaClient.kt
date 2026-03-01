@@ -29,7 +29,7 @@ class OllamaClient(
 
     override suspend fun testConnection(): ConnectionTestResult = withContext(Dispatchers.IO) {
         try {
-            val url = "\$baseUrl/api/tags"
+            val url = "$baseUrl/api/tags"
             val request = Request.Builder().url(url).build()
             val response = client.newCall(request).execute()
 
@@ -42,10 +42,10 @@ class OllamaClient(
                     models = models
                 )
             } else {
-                ConnectionTestResult(false, "Failed to connect: \${response.code} \${response.message}")
+                ConnectionTestResult(false, "Failed to connect: ${response.code} ${response.message}")
             }
         } catch (e: Exception) {
-            ConnectionTestResult(false, "Connection error: \${e.message}")
+            ConnectionTestResult(false, "Connection error: ${e.message}")
         }
     }
 
@@ -68,7 +68,7 @@ class OllamaClient(
             return@callbackFlow
         }
 
-        val url = "\$baseUrl/api/chat"
+        val url = "$baseUrl/api/chat"
 
         // Build JSON body
         val jsonMap = mutableMapOf<String, Any>(
@@ -126,7 +126,7 @@ class OllamaClient(
             override fun onResponse(call: Call, response: Response) {
                 try {
                     if (!response.isSuccessful) {
-                        close(Exception("Server returned: \${response.code} \${response.message}"))
+                        close(Exception("Server returned: ${response.code} ${response.message}"))
                         return
                     }
 

@@ -85,7 +85,7 @@ class ConnectionSettingsViewModel @Inject constructor(
                 val result = api.testConnection()
 
                 if (result.isSuccessful) {
-                    _testResult.value = "Success: \${result.message}"
+                    _testResult.value = "Success: ${result.message}"
                     if (conn.type == "OLLAMA") {
                         _availableModels.value = result.models.map { it.name }
                     } else if (conn.type == "KOBOLDCPP" && result.currentModel != null) {
@@ -93,10 +93,10 @@ class ConnectionSettingsViewModel @Inject constructor(
                         updateField(modelName = result.currentModel)
                     }
                 } else {
-                    _testResult.value = "Failed: \${result.message}"
+                    _testResult.value = "Failed: ${result.message}"
                 }
             } catch (e: Exception) {
-                _testResult.value = "Error: \${e.message}"
+                _testResult.value = "Error: ${e.message}"
             }
         }
     }

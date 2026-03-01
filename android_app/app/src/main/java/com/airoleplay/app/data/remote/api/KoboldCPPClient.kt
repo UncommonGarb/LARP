@@ -31,7 +31,7 @@ class KoboldCPPClient(
 
     override suspend fun testConnection(): ConnectionTestResult = withContext(Dispatchers.IO) {
         try {
-            val url = "\$baseUrl/api/v1/model"
+            val url = "$baseUrl/api/v1/model"
             val request = Request.Builder().url(url).build()
             val response = client.newCall(request).execute()
 
@@ -43,13 +43,13 @@ class KoboldCPPClient(
                 if (modelName.isNullOrBlank() || modelName == "none") {
                     ConnectionTestResult(false, "KoboldCPP connected, but NO MODEL is loaded.")
                 } else {
-                    ConnectionTestResult(true, "Connected! Model: \$modelName", currentModel = modelName)
+                    ConnectionTestResult(true, "Connected! Model: $modelName", currentModel = modelName)
                 }
             } else {
-                ConnectionTestResult(false, "Failed to connect: \${response.code} \${response.message}")
+                ConnectionTestResult(false, "Failed to connect: ${response.code} ${response.message}")
             }
         } catch (e: Exception) {
-            ConnectionTestResult(false, "Connection error: \${e.message}")
+            ConnectionTestResult(false, "Connection error: ${e.message}")
         }
     }
 
@@ -72,7 +72,7 @@ class KoboldCPPClient(
             return@callbackFlow
         }
 
-        val url = "\$baseUrl/api/extra/generate/stream"
+        val url = "$baseUrl/api/extra/generate/stream"
 
         // Build JSON body
         val jsonMap = mutableMapOf<String, Any>(
@@ -121,7 +121,7 @@ class KoboldCPPClient(
                 if (t != null) {
                     close(t)
                 } else {
-                    close(Exception("SSE Stream Failed: \${response?.code}"))
+                    close(Exception("SSE Stream Failed: ${response?.code}"))
                 }
             }
         }
@@ -142,7 +142,7 @@ class KoboldCPPClient(
                 activeEventSource = null
 
                 // Then send the abort signal to the backend
-                val url = "\$baseUrl/api/extra/abort"
+                val url = "$baseUrl/api/extra/abort"
                 val request = Request.Builder()
                     .url(url)
                     .post("{}".toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()))
@@ -156,7 +156,7 @@ class KoboldCPPClient(
 
     override suspend fun getContextSizeLimit(): Int = withContext(Dispatchers.IO) {
         try {
-            val url = "\$baseUrl/api/v1/config/max_context_length"
+            val url = "$baseUrl/api/v1/config/max_context_length"
             val request = Request.Builder().url(url).build()
             val response = client.newCall(request).execute()
             if (response.isSuccessful) {
@@ -175,7 +175,7 @@ class KoboldCPPClient(
 
     suspend fun countTokensExact(prompt: String): Int = withContext(Dispatchers.IO) {
         try {
-            val url = "\$baseUrl/api/extra/tokencount"
+            val url = "$baseUrl/api/extra/tokencount"
             val jsonMap = mapOf("prompt" to prompt)
             val jsonBody = gson.toJson(jsonMap)
             val requestBody = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())

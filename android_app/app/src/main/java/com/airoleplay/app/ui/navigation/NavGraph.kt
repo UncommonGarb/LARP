@@ -39,25 +39,25 @@ fun AppNavGraph() {
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
-                startDestination = Screen.Onboarding.route // Start at onboarding, it can auto-navigate if not first launch
+                startDestination = Screen.Onboarding.route
             ) {
                 composable(Screen.Onboarding.route) {
                     com.airoleplay.app.ui.screens.onboarding.OnboardingScreen(navController)
                 }
                 composable(Screen.Discover.route) {
-                    DiscoverScreen(navController)
+                    DiscoverScreen(navController, innerPadding)
                 }
                 composable(Screen.Chats.route) {
-                    ChatsScreen(navController)
+                    ChatsScreen(navController, innerPadding)
                 }
                 composable(Screen.Create.route) {
                     CreateScreen(navController)
                 }
                 composable(Screen.Settings.route) {
-                    SettingsScreen(navController)
+                    SettingsScreen(navController, innerPadding)
                 }
                 composable(Screen.CharacterDetail.route) { backStackEntry ->
                     val characterId = backStackEntry.arguments?.getString("characterId")?.toLongOrNull() ?: return@composable

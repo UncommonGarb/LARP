@@ -59,7 +59,7 @@ class CharacterExporter @Inject constructor(
                 characterName = character.name
             )
 
-            val uri = FileProvider.getUriForFile(context, "\${context.packageName}.fileprovider", outputFile)
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", outputFile)
             Result.success(uri)
 
         } catch (e: Exception) {
@@ -80,7 +80,7 @@ class CharacterExporter @Inject constructor(
             )
         }
         return CharacterBook(
-            name = "\$name Lorebook",
+            name = "$name Lorebook",
             entries = bookEntries
         )
     }
