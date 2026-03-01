@@ -2,7 +2,7 @@ package com.airoleplay.app.ui.navigation
 
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
-    object Discover : Screen("discover")
+    object Characters : Screen("characters")
     object Chats : Screen("chats")
     object Create : Screen("create?characterId={characterId}") {
         fun createRoute(characterId: Long? = null) = if (characterId != null) "create?characterId=$characterId" else "create"

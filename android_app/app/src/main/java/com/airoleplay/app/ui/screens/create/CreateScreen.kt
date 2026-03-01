@@ -52,6 +52,7 @@ fun CreateScreen(
 
     Scaffold(
         containerColor = DarkBackground,
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -174,7 +175,9 @@ fun CreateScreen(
                         navController.popBackStack()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                 shape = RoundedCornerShape(12.dp)
             ) {

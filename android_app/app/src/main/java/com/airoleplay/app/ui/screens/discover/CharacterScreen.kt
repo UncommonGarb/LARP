@@ -13,9 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,12 +28,13 @@ import coil.compose.AsyncImage
 import com.airoleplay.app.data.local.entity.CharacterEntity
 import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
+import java.io.File
 
 @Composable
-fun DiscoverScreen(
+fun CharacterScreen(
     navController: NavController,
     contentPadding: PaddingValues = PaddingValues(),
-    viewModel: DiscoverViewModel = hiltViewModel()
+    viewModel: CharacterViewModel = hiltViewModel()
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val characters by viewModel.characters.collectAsState()
@@ -47,7 +46,7 @@ fun DiscoverScreen(
     Scaffold(
         containerColor = DarkBackground,
         topBar = {
-            DiscoverTopBar(
+            CharacterTopBar(
                 searchQuery = searchQuery,
                 onSearchChange = viewModel::updateSearchQuery,
                 personaAvatarPath = activePersona?.avatarImagePath
@@ -124,7 +123,7 @@ fun DiscoverScreen(
 }
 
 @Composable
-fun DiscoverTopBar(
+fun CharacterTopBar(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
     personaAvatarPath: String?
@@ -133,6 +132,7 @@ fun DiscoverTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
+            .statusBarsPadding()
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -140,7 +140,7 @@ fun DiscoverTopBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Discover",
+                text = "Characters",
                 style = MaterialTheme.typography.titleLarge,
                 color = TextPrimary
             )
@@ -200,8 +200,11 @@ fun RecentCharacterCard(char: CharacterEntity, onClick: () -> Unit) {
             .background(SurfaceCard)
             .clickable(onClick = onClick)
     ) {
+        val model = remember(char.avatarImagePath) {
+            char.avatarImagePath?.let { if (it.startsWith("/")) File(it) else it }
+        }
         AsyncImage(
-            model = char.avatarImagePath,
+            model = model,
             contentDescription = char.name,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
@@ -240,8 +243,11 @@ fun CharacterGridCard(char: CharacterEntity, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = SurfaceCard)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            val model = remember(char.avatarImagePath) {
+                char.avatarImagePath?.let { if (it.startsWith("/")) File(it) else it }
+            }
             AsyncImage(
-                model = char.avatarImagePath,
+                model = model,
                 contentDescription = char.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()

@@ -16,7 +16,7 @@ import androidx.navigation.NavType
 import com.airoleplay.app.ui.screens.chat.LorebookScreen
 import com.airoleplay.app.ui.screens.chats.ChatsScreen
 import com.airoleplay.app.ui.screens.create.CreateScreen
-import com.airoleplay.app.ui.screens.discover.DiscoverScreen
+import com.airoleplay.app.ui.screens.discover.CharacterScreen
 import com.airoleplay.app.ui.screens.settings.*
 
 @Composable
@@ -28,7 +28,7 @@ fun AppNavGraph() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     val bottomBarScreens = listOf(
-        Screen.Discover.route,
+        Screen.Characters.route,
         Screen.Chats.route,
         Screen.Create.route,
         Screen.Settings.route
@@ -50,8 +50,8 @@ fun AppNavGraph() {
                 composable(Screen.Onboarding.route) {
                     com.airoleplay.app.ui.screens.onboarding.OnboardingScreen(navController)
                 }
-                composable(Screen.Discover.route) {
-                    DiscoverScreen(navController, innerPadding)
+                composable(Screen.Characters.route) {
+                    CharacterScreen(navController, innerPadding)
                 }
                 composable(Screen.Chats.route) {
                     ChatsScreen(navController, innerPadding)

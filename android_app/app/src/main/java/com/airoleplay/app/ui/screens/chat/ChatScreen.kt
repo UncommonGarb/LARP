@@ -61,7 +61,8 @@ fun ChatScreen(
 
     Scaffold(
         containerColor = DarkBackground,
-        contentWindowInsets = WindowInsets.statusBars,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        modifier = Modifier.fillMaxSize(),
         bottomBar = {
             Column(
                 modifier = Modifier
@@ -139,13 +140,16 @@ fun ChatScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Box(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(top = 100.dp, bottom = 16.dp),
+                contentPadding = PaddingValues(
+                    top = 80.dp + padding.calculateTopPadding(),
+                    bottom = padding.calculateBottomPadding() + 16.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(uiState.messages) { message ->
@@ -182,6 +186,7 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .align(Alignment.TopCenter)
                     .background(SurfaceCard)
                     .animateContentSize()
             ) {
@@ -263,6 +268,7 @@ fun ChatScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .background(SurfaceCard)
                         .statusBarsPadding()
                         .clickable { showMenu = !showMenu }
                         .padding(horizontal = 4.dp, vertical = 8.dp),

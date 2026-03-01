@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class DiscoverViewModel @Inject constructor(
+class CharacterViewModel @Inject constructor(
     private val characterDao: CharacterDao,
     private val chatDao: ChatDao,
     private val settingsDao: SettingsDao

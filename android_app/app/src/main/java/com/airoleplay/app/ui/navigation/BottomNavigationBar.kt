@@ -24,18 +24,18 @@ fun BottomNavigationBar(navController: NavController, currentRoute: String?) {
         contentColor = TextPrimary
     ) {
         val screens = listOf(
-            Screen.Discover,
             Screen.Chats,
             Screen.Create,
+            Screen.Characters,
             Screen.Settings
         )
         val icons = listOf(
-            Icons.Default.Home,
             Icons.Default.Menu,
             Icons.Default.Add,
+            Icons.Default.Home,
             Icons.Default.Settings
         )
-        val labels = listOf("Discover", "Chats", "Create", "Settings")
+        val labels = listOf("Chats", "Create", "Characters", "Settings")
 
         screens.forEachIndexed { index, screen ->
             val selected = currentRoute == screen.route
@@ -44,7 +44,10 @@ fun BottomNavigationBar(navController: NavController, currentRoute: String?) {
                 onClick = {
                     if (!selected) {
                         navController.navigate(screen.route) {
-                            popUpTo(Screen.Discover.route) { saveState = true }
+                            popUpTo(Screen.Chats.route) {
+                                saveState = true
+                                inclusive = false
+                            }
                             launchSingleTop = true
                             restoreState = true
                         }
