@@ -205,13 +205,17 @@ fun ChatScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(uiState.messages) { message ->

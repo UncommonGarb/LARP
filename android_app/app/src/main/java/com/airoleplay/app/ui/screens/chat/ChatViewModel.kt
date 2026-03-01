@@ -315,6 +315,12 @@ class ChatViewModel @Inject constructor(
                 swipeGroupId = groupToUse
             )
             chatDao.insertMessage(aiMsg)
+
+            // Wait for DB to update and Flow to emit before clearing partial
+            // This prevents the visual "pop"
+            chatDao.getMessagesForSession(sessionId).first { msgs ->
+                msgs.any { it.swipeGroupId == groupToUse && it.content.trim() == finalText.trim() }
+            }
         }
         _uiState.update { it.copy(isGenerating = false, partialGeneration = "") }
     }
