@@ -137,7 +137,7 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun sendMessage(content: String, base64Images: List<String> = emptyList()) {
+    fun sendMessage(content: String, attachedImagePath: String? = null) {
         if (content.isBlank() || _uiState.value.isGenerating) return
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -145,8 +145,8 @@ class ChatViewModel @Inject constructor(
             val userMsg = ChatMessageEntity(
                 sessionId = sessionId,
                 role = "user",
-                content = content
-                // Note: Image persistence in DB would need an update to ChatMessageEntity to store the URI or Base64 string, omitted here for scope constraints
+                content = content,
+                attachedImagePath = attachedImagePath
             )
             chatDao.insertMessage(userMsg)
 

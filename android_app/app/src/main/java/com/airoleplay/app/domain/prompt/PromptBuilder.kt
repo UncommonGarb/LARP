@@ -120,7 +120,32 @@ class PromptBuilder @javax.inject.Inject constructor(
 
             // We always want to keep at least the last 4 exchanges (if possible)
             if (msgTokens <= availableTokens || selectedMessages.size < 4) {
-                selectedMessages.add(0, PromptMessage(role = msg.role, content = formattedContent))
+                val base64Images = mutableListOf<String>()
+                if (msg.attachedImagePath != null && msg.attachedImagePath.isNotBlank()) {
+                    // Fetch the context to use the ImageUtils safely, this would normally require context injection
+                    // but for PromptBuilder we might need to handle it differently or pass it in.
+                    // Instead, since ImageUtils needs a Context, we'll assume the path is a direct file path and read it directly here
+                    // if it's a file:// path. This matches resolveModel's logic.
+                    try {
+                        val file = if (msg.attachedImagePath.startsWith("file://")) {
+                            java.io.File(msg.attachedImagePath.removePrefix("file://"))
+                        } else {
+                            java.io.File(msg.attachedImagePath)
+                        }
+                        if (file.exists()) {
+                           val bytes = file.readBytes()
+                           val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                           base64Images.add(base64)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                selectedMessages.add(0, PromptMessage(
+                    role = msg.role,
+                    content = formattedContent,
+                    images = if (base64Images.isNotEmpty()) base64Images else null
+                ))
                 availableTokens -= msgTokens
             } else {
                 break

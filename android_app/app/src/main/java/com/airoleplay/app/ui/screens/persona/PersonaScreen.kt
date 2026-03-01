@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -66,17 +67,45 @@ fun PersonaScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            LazyColumn(
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(personas) { persona ->
-                    PersonaCard(
-                        persona = persona,
-                        onActivate = { viewModel.setActivePersona(persona.id) },
-                        onDelete = { viewModel.deletePersona(persona) },
-                        canDelete = personas.size > 1
-                    )
+            if (personas.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "No personas",
+                            modifier = Modifier.size(64.dp),
+                            tint = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No Personas Found",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Tap the + button to create a new persona.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(personas) { persona ->
+                        PersonaCard(
+                            persona = persona,
+                            onActivate = { viewModel.setActivePersona(persona.id) },
+                            onDelete = { viewModel.deletePersona(persona) },
+                            canDelete = personas.size > 1
+                        )
+                    }
                 }
             }
         }
