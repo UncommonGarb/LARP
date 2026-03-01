@@ -53,6 +53,29 @@ fun CreateScreen(
     Scaffold(
         containerColor = DarkBackground,
         modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = DarkBackground,
+                tonalElevation = 8.dp
+            ) {
+                Button(
+                    onClick = {
+                        viewModel.saveCharacter(context) {
+                            navController.popBackStack()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .navigationBarsPadding(),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Save Character", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -168,21 +191,6 @@ fun CreateScreen(
             )
 
             Spacer(modifier = Modifier.height(32.dp))
-
-            Button(
-                onClick = {
-                    viewModel.saveCharacter(context) {
-                        navController.popBackStack()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 32.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Save Character", color = Color.White, fontWeight = FontWeight.Bold)
-            }
         }
     }
 
@@ -230,7 +238,8 @@ fun CreateTextField(
                 focusedTextColor = TextPrimary,
                 unfocusedTextColor = TextPrimary,
                 focusedIndicatorColor = AccentColor,
-                unfocusedIndicatorColor = Color.Transparent
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = AccentColor
             ),
             shape = RoundedCornerShape(8.dp),
             singleLine = singleLine,

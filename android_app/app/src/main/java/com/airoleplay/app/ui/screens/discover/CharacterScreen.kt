@@ -11,7 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +28,7 @@ import coil.compose.AsyncImage
 import com.airoleplay.app.data.local.entity.CharacterEntity
 import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
+import com.airoleplay.app.utils.ImageUtils
 import java.io.File
 
 @Composable
@@ -152,16 +153,19 @@ fun CharacterTopBar(
                     .clip(CircleShape)
                     .background(SurfaceCard)
             ) {
-                if (personaAvatarPath != null) {
+                val model = remember(personaAvatarPath) {
+                    ImageUtils.resolveModel(personaAvatarPath)
+                }
+                if (model != null) {
                     AsyncImage(
-                        model = personaAvatarPath,
+                        model = model,
                         contentDescription = "Active Persona",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Default.Search, // Placeholder
+                        imageVector = Icons.Default.Person,
                         contentDescription = null,
                         tint = TextSecondary,
                         modifier = Modifier.align(Alignment.Center)
@@ -201,14 +205,23 @@ fun RecentCharacterCard(char: CharacterEntity, onClick: () -> Unit) {
             .clickable(onClick = onClick)
     ) {
         val model = remember(char.avatarImagePath) {
-            char.avatarImagePath?.let { if (it.startsWith("/")) File(it) else it }
+            ImageUtils.resolveModel(char.avatarImagePath)
         }
-        AsyncImage(
-            model = model,
-            contentDescription = char.name,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
+        if (model != null) {
+            AsyncImage(
+                model = model,
+                contentDescription = char.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(48.dp))
+            }
+        }
         // Gradient overlay
         Box(
             modifier = Modifier
@@ -244,14 +257,23 @@ fun CharacterGridCard(char: CharacterEntity, onClick: () -> Unit) {
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             val model = remember(char.avatarImagePath) {
-                char.avatarImagePath?.let { if (it.startsWith("/")) File(it) else it }
+                ImageUtils.resolveModel(char.avatarImagePath)
             }
-            AsyncImage(
-                model = model,
-                contentDescription = char.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            if (model != null) {
+                AsyncImage(
+                    model = model,
+                    contentDescription = char.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(64.dp))
+                }
+            }
             // Gradient overlay
             Box(
                 modifier = Modifier

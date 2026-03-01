@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.airoleplay.app.utils.ImageUtils
 import com.airoleplay.app.data.local.entity.ChatMessageEntity
 import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
@@ -61,15 +62,79 @@ fun ChatScreen(
 
     Scaffold(
         containerColor = DarkBackground,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { showMenu = !showMenu }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(DarkBackground)
+                        ) {
+                            val avatarModel = remember(uiState.character?.avatarImagePath) {
+                                ImageUtils.resolveModel(uiState.character?.avatarImagePath)
+                            }
+                            if (avatarModel != null) {
+                                AsyncImage(
+                                    model = avatarModel,
+                                    contentDescription = "Avatar",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
+                            Text(
+                                text = uiState.character?.name ?: "Loading...",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val statusColor = when (uiState.connectionStatus) {
+                                    ConnectionStatus.CONNECTED -> SuccessGreen
+                                    ConnectionStatus.DISCONNECTED -> ErrorRed
+                                    ConnectionStatus.CONNECTING -> WarningYellow
+                                    else -> TextSecondary
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(statusColor, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = uiState.connectionStatus.name.lowercase().replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceCard)
+            )
+        },
         bottomBar = {
             Column(
                 modifier = Modifier
                     .background(DarkBackground)
+                    .navigationBarsPadding()
                     .imePadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .navigationBarsPadding()
             ) {
                 if (attachedImageUri != null) {
                     Box(modifier = Modifier.padding(bottom = 8.dp)) {
@@ -140,16 +205,13 @@ fun ChatScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(
-                    top = 80.dp + padding.calculateTopPadding(),
-                    bottom = padding.calculateBottomPadding() + 16.dp
-                ),
+                contentPadding = PaddingValues(vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(uiState.messages) { message ->
@@ -182,150 +244,85 @@ fun ChatScreen(
                 }
             }
 
-            // Custom Sliding Header & Menu
-            Column(
+            // Custom Sliding Menu (Slides down from beneath header as overlay)
+            AnimatedVisibility(
+                visible = showMenu,
+                enter = slideInVertically(initialOffsetY = { -it }),
+                exit = slideOutVertically(targetOffsetY = { -it }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
-                    .background(SurfaceCard)
-                    .animateContentSize()
             ) {
-                AnimatedVisibility(
-                    visible = showMenu,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp)
-                    ) {
-                        // Menu Items
-                        ListItem(
-                            headlineContent = { Text("Persona") },
-                            leadingContent = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(DarkBackground)
-                                ) {
-                                    if (uiState.activePersona?.avatarImagePath != null) {
-                                        AsyncImage(
-                                            model = uiState.activePersona!!.avatarImagePath,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    } else {
-                                        Icon(Icons.Default.Person, contentDescription = null, tint = AccentColor)
-                                    }
-                                }
-                            },
-                            modifier = Modifier.clickable {
-                                showMenu = false
-                                navController.navigate(Screen.PersonaSettings.route)
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                        )
-                        ListItem(
-                            headlineContent = { Text("Lorebook") },
-                            leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = AccentColor) },
-                            modifier = Modifier.clickable {
-                                showMenu = false
-                                uiState.character?.id?.let {
-                                    navController.navigate(Screen.Lorebook.createRoute(it))
-                                }
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                        )
-                        ListItem(
-                            headlineContent = { Text("Edit Character") },
-                            leadingContent = { Icon(Icons.Default.Edit, contentDescription = null, tint = AccentColor) },
-                            modifier = Modifier.clickable {
-                                showMenu = false
-                                uiState.character?.id?.let {
-                                    navController.navigate(Screen.Create.createRoute(it))
-                                }
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                        )
-                        ListItem(
-                            headlineContent = { Text("Chat History") },
-                            leadingContent = { Icon(Icons.Default.History, contentDescription = null, tint = AccentColor) },
-                            modifier = Modifier.clickable {
-                                showMenu = false
-                                uiState.character?.id?.let {
-                                    navController.navigate(Screen.CharacterDetail.createRoute(it))
-                                }
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                        )
-                    }
-                }
-
-                // Header Row (moves down when menu is revealed)
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(SurfaceCard)
-                        .statusBarsPadding()
-                        .clickable { showMenu = !showMenu }
-                        .padding(horizontal = 4.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(bottom = 16.dp)
                 ) {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(if (showMenu) 64.dp else 40.dp)
-                            .clip(CircleShape)
-                            .background(DarkBackground)
-                            .animateContentSize()
-                    ) {
-                        if (uiState.character?.avatarImagePath != null) {
-                            AsyncImage(
-                                model = uiState.character!!.avatarImagePath,
-                                contentDescription = "Avatar",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = uiState.character?.name ?: "Loading...",
-                            style = if (showMenu) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (!showMenu) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val statusColor = when (uiState.connectionStatus) {
-                                    ConnectionStatus.CONNECTED -> SuccessGreen
-                                    ConnectionStatus.DISCONNECTED -> ErrorRed
-                                    ConnectionStatus.CONNECTING -> WarningYellow
-                                    else -> TextSecondary
+                    // Menu Items
+                    ListItem(
+                        headlineContent = { Text("Persona") },
+                        leadingContent = {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(DarkBackground)
+                            ) {
+                                val personaModel = remember(uiState.activePersona?.avatarImagePath) {
+                                    ImageUtils.resolveModel(uiState.activePersona?.avatarImagePath)
                                 }
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(statusColor, CircleShape)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = uiState.connectionStatus.name.lowercase().replaceFirstChar { it.uppercase() },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextSecondary
-                                )
+                                if (personaModel != null) {
+                                    AsyncImage(
+                                        model = personaModel,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(Icons.Default.Person, contentDescription = null, tint = AccentColor)
+                                }
                             }
-                        }
-                    }
+                        },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            navController.navigate(Screen.PersonaSettings.route)
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Lorebook") },
+                        leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = AccentColor) },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.Lorebook.createRoute(it))
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Edit Character") },
+                        leadingContent = { Icon(Icons.Default.Edit, contentDescription = null, tint = AccentColor) },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.Create.createRoute(it))
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Chat History") },
+                        leadingContent = { Icon(Icons.Default.History, contentDescription = null, tint = AccentColor) },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.CharacterDetail.createRoute(it))
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
                 }
             }
         }
@@ -357,9 +354,12 @@ fun MessageBubble(
                     .clip(CircleShape)
                     .background(SurfaceCard)
             ) {
-                if (avatarPath != null) {
+                val avatarModel = remember(avatarPath) {
+                    ImageUtils.resolveModel(avatarPath)
+                }
+                if (avatarModel != null) {
                     AsyncImage(
-                        model = avatarPath,
+                        model = avatarModel,
                         contentDescription = "Avatar",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -510,9 +510,12 @@ fun MessageBubble(
                     .clip(CircleShape)
                     .background(SurfaceCard)
             ) {
-                if (avatarPath != null) {
+                val avatarModel = remember(avatarPath) {
+                    ImageUtils.resolveModel(avatarPath)
+                }
+                if (avatarModel != null) {
                     AsyncImage(
-                        model = avatarPath,
+                        model = avatarModel,
                         contentDescription = "User Avatar",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
