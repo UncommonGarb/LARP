@@ -229,10 +229,23 @@ class ChatViewModel @Inject constructor(
 
             // Add required Stop Sequences
             val personaName = state.activePersona?.name ?: "User"
-            val stopSeqs = listOf(
+            val stopSeqs = mutableListOf(
                 "$personaName:", "\n$personaName", "User:", "\nUser",
                 "${char.name}:", "\n${char.name}"
             )
+
+            // Add format specific stop sequences
+            if (conn.type.uppercase() == "KOBOLDCPP") {
+                when (conn.instructFormat.uppercase().replace(" ", "")) {
+                    "CHATML" -> stopSeqs.addAll(listOf("<|im_end|>", "<|im_start|>"))
+                    "LLAMA3" -> stopSeqs.addAll(listOf("<|eot_id|>", "<|start_header_id|>"))
+                    "ALPACA" -> stopSeqs.add("### Instruction:")
+                }
+            } else if (conn.type.uppercase() == "OLLAMA") {
+                 // Ollama handles tokens internally but extra stop sequences can't hurt
+                 stopSeqs.addAll(listOf("<|im_end|>", "<|eot_id|>", "### Instruction:"))
+            }
+
             currentGenSettings = currentGenSettings.copy(stopSequences = stopSeqs)
 
             val promptMessages = promptBuilder.buildPromptMessages(

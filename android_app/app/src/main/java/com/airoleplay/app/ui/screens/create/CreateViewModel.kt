@@ -1,11 +1,13 @@
 package com.airoleplay.app.ui.screens.create
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.airoleplay.app.data.local.dao.CharacterDao
 import com.airoleplay.app.data.local.entity.CharacterEntity
+import com.airoleplay.app.utils.FileUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,14 +59,22 @@ class CreateViewModel @Inject constructor(
         _avatarUri.value = uri
     }
 
-    fun saveCharacter(onSuccess: () -> Unit = {}) {
+    fun saveCharacter(context: Context, onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             _isSaving.value = true
             try {
-                if (_characterState.value.id == 0L) {
-                    characterDao.insertCharacter(_characterState.value)
+                var finalCharacter = _characterState.value
+
+                _avatarUri.value?.let { uri ->
+                    FileUtils.saveImageToInternalStorage(context, uri)?.let { path ->
+                        finalCharacter = finalCharacter.copy(avatarImagePath = path)
+                    }
+                }
+
+                if (finalCharacter.id == 0L) {
+                    characterDao.insertCharacter(finalCharacter)
                 } else {
-                    characterDao.updateCharacter(_characterState.value)
+                    characterDao.updateCharacter(finalCharacter)
                 }
                 onSuccess()
             } finally {

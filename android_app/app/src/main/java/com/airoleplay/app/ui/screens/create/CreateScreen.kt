@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -31,7 +33,14 @@ fun CreateScreen(
     viewModel: CreateViewModel = hiltViewModel()
 ) {
     val character by viewModel.characterState.collectAsState()
+    val avatarUri by viewModel.avatarUri.collectAsState()
     val scrollState = rememberScrollState()
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        viewModel.updateAvatarUri(uri)
+    }
 
     Scaffold(
         containerColor = DarkBackground,
@@ -64,11 +73,12 @@ fun CreateScreen(
                     .size(100.dp)
                     .clip(CircleShape)
                     .background(SurfaceCard)
-                    .clickable { /* Image picker */ }
+                    .clickable { imagePickerLauncher.launch("image/*") }
             ) {
-                if (character.avatarImagePath != null) {
+                val displayUri = avatarUri ?: character.avatarImagePath
+                if (displayUri != null) {
                     AsyncImage(
-                        model = character.avatarImagePath,
+                        model = displayUri,
                         contentDescription = "Avatar",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -139,9 +149,10 @@ fun CreateScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            val context = androidx.compose.ui.platform.LocalContext.current
             Button(
                 onClick = {
-                    viewModel.saveCharacter {
+                    viewModel.saveCharacter(context) {
                         navController.popBackStack()
                     }
                 },

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,6 +38,8 @@ fun ChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
+    val sheetState = rememberModalBottomSheetState()
+    var showSheet by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var attachedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val haptic = LocalHapticFeedback.current
@@ -66,9 +69,7 @@ fun ChatScreen(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable {
-                            uiState.character?.id?.let {
-                                navController.navigate(Screen.CharacterDetail.createRoute(it))
-                            }
+                            showSheet = true
                         }
                     ) {
                         Box(
@@ -126,9 +127,9 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .background(DarkBackground)
+                    .imePadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .navigationBarsPadding()
-                    .imePadding()
             ) {
                 if (attachedImageUri != null) {
                     Box(modifier = Modifier.padding(bottom = 8.dp)) {
@@ -199,6 +200,64 @@ fun ChatScreen(
             }
         }
     ) { padding ->
+        if (showSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showSheet = false },
+                sheetState = sheetState,
+                containerColor = SurfaceCard,
+                contentColor = TextPrimary
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 32.dp)
+                ) {
+                    ListItem(
+                        headlineContent = { Text("Persona") },
+                        leadingContent = { Icon(Icons.Default.Person, contentDescription = null) },
+                        modifier = Modifier.clickable {
+                            showSheet = false
+                            navController.navigate(Screen.PersonaSettings.route)
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Lorebook") },
+                        leadingContent = { Icon(Icons.Default.List, contentDescription = null) },
+                        modifier = Modifier.clickable {
+                            showSheet = false
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.Lorebook.createRoute(it))
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Edit Character") },
+                        leadingContent = { Icon(Icons.Default.Edit, contentDescription = null) },
+                        modifier = Modifier.clickable {
+                            showSheet = false
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.Create.createRoute(it))
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Chat History") },
+                        leadingContent = { Icon(Icons.Default.List, contentDescription = null) },
+                        modifier = Modifier.clickable {
+                            showSheet = false
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.CharacterDetail.createRoute(it))
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                }
+            }
+        }
+
         LazyColumn(
             state = listState,
             modifier = Modifier

@@ -11,10 +11,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
+import com.airoleplay.app.ui.screens.chat.LorebookScreen
 import com.airoleplay.app.ui.screens.chats.ChatsScreen
 import com.airoleplay.app.ui.screens.create.CreateScreen
 import com.airoleplay.app.ui.screens.discover.DiscoverScreen
-import com.airoleplay.app.ui.screens.settings.SettingsScreen
+import com.airoleplay.app.ui.screens.settings.*
 
 @Composable
 fun AppNavGraph() {
@@ -53,7 +56,14 @@ fun AppNavGraph() {
                 composable(Screen.Chats.route) {
                     ChatsScreen(navController, innerPadding)
                 }
-                composable(Screen.Create.route) {
+                composable(
+                    Screen.Create.route,
+                    arguments = listOf(navArgument("characterId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    })
+                ) {
                     CreateScreen(navController)
                 }
                 composable(Screen.Settings.route) {
@@ -73,6 +83,16 @@ fun AppNavGraph() {
                 }
                 composable(Screen.PersonaSettings.route) {
                     com.airoleplay.app.ui.screens.persona.PersonaScreen(navController)
+                }
+                composable(Screen.BackendList.route) {
+                    BackendListScreen(navController)
+                }
+                composable(Screen.GlobalGenerationSettings.route) {
+                    GlobalGenerationSettingsScreen(navController)
+                }
+                composable(Screen.Lorebook.route) { backStackEntry ->
+                    val characterId = backStackEntry.arguments?.getString("characterId")?.toLongOrNull() ?: return@composable
+                    LorebookScreen(navController, characterId)
                 }
             }
         }

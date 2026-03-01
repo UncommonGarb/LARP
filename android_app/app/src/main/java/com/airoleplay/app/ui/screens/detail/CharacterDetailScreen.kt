@@ -155,7 +155,7 @@ fun CharacterDetailScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { /* Navigate to Edit screen */ },
+                            onClick = { navController.navigate(Screen.Create.createRoute(char.id)) },
                             modifier = Modifier.weight(1f),
                             border = ButtonDefaults.outlinedButtonBorder.copy(brush = Brush.horizontalGradient(listOf(AccentColor, AccentColor))),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentColor)

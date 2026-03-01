@@ -7,9 +7,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -56,83 +55,33 @@ fun SettingsScreen(
                 top = 16.dp,
                 end = 16.dp,
                 bottom = 16.dp + contentPadding.calculateBottomPadding()
-            ),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            )
         ) {
-            // User Persona Section
             item {
-                Column {
-                    PersonaSettingsCard(persona = activePersona) {
-                        navController.navigate(Screen.PersonaSettings.route)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Manage Personas",
-                        color = AccentColor,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.clickable { navController.navigate(Screen.PersonaSettings.route) }
-                    )
-                }
+                SettingsListItem(
+                    title = "User Persona",
+                    subtitle = activePersona?.name ?: "No persona selected",
+                    icon = Icons.Default.Person,
+                    onClick = { navController.navigate(Screen.PersonaSettings.route) }
+                )
             }
 
-            // Backend Connections Section
             item {
-                Column {
-                    Text(
-                        text = "AI BACKENDS",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    connections.forEach { conn ->
-                        ConnectionRow(
-                            connection = conn,
-                            onSelect = { viewModel.setActiveConnection(conn.id) },
-                            onEdit = { navController.navigate(Screen.ConnectionSettings.createRoute(conn.id)) }
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { navController.navigate(Screen.ConnectionSettings.createRoute(-1L)) } // New connection
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add", tint = AccentColor)
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Add Connection", color = AccentColor, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
+                SettingsListItem(
+                    title = "AI Backends",
+                    subtitle = "${connections.size} connections configured",
+                    icon = Icons.Default.Settings,
+                    onClick = { navController.navigate(Screen.BackendList.route) }
+                )
             }
 
-            // Temporary Test Result display for convenience in development
-            if (testResult != null) {
-                item {
-                    Text(
-                        text = testResult!!,
-                        color = if (testResult!!.startsWith("Success")) SuccessGreen else ErrorRed,
-                        modifier = Modifier.padding(vertical = 8.dp).clickable { viewModel.clearTestResult() }
-                    )
-                }
-            }
-
-            // Global Defaults
             item {
-                Column {
-                    Text(
-                        text = "GENERATION DEFAULTS",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    SettingsSliderRow("Temperature", 0.8f)
-                    SettingsSliderRow("Top-P", 0.9f)
-                    SettingsSliderRow("Repetition Penalty", 1.1f)
-                    SettingsNumberRow("Max New Tokens", "400")
-                    SettingsNumberRow("Context Limit", "4096")
-                }
+                SettingsListItem(
+                    title = "Generation Defaults",
+                    subtitle = "Temperature, Top-P, etc.",
+                    icon = Icons.Default.Build,
+                    onClick = { navController.navigate(Screen.GlobalGenerationSettings.route) }
+                )
             }
 
             item {
@@ -144,10 +93,56 @@ fun SettingsScreen(
                         text = "build:a0.01",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(vertical = 16.dp)
+                        modifier = Modifier.padding(vertical = 32.dp)
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SettingsListItem(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = AccentColor,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowRight,
+                contentDescription = null,
+                tint = TextSecondary
+            )
         }
     }
 }

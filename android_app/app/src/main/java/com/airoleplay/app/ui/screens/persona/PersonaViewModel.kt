@@ -1,10 +1,12 @@
 package com.airoleplay.app.ui.screens.persona
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.airoleplay.app.data.local.dao.SettingsDao
 import com.airoleplay.app.data.local.entity.UserPersonaEntity
+import com.airoleplay.app.utils.FileUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,13 +32,13 @@ class PersonaViewModel @Inject constructor(
         }
     }
 
-    fun addPersona(name: String, description: String, avatarUri: Uri?) {
+    fun addPersona(context: Context, name: String, description: String, avatarUri: Uri?) {
         viewModelScope.launch {
-            // For now, save URI string. Production app would copy URI to internal storage as done in Character creation
+            val imagePath = avatarUri?.let { FileUtils.saveImageToInternalStorage(context, it) }
             val newPersona = UserPersonaEntity(
                 name = name,
                 description = description,
-                avatarImagePath = avatarUri?.toString(),
+                avatarImagePath = imagePath,
                 isActive = personas.value.isEmpty() // If first, make active
             )
             settingsDao.insertPersona(newPersona)
