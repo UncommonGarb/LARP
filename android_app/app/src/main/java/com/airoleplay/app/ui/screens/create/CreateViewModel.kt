@@ -41,6 +41,9 @@ class CreateViewModel @Inject constructor(
     private val _isSaving = MutableStateFlow(false)
     val isSaving = _isSaving.asStateFlow()
 
+    private val _hasChanges = MutableStateFlow(false)
+    val hasChanges = _hasChanges.asStateFlow()
+
     init {
         characterId?.let { id ->
             viewModelScope.launch {
@@ -53,10 +56,12 @@ class CreateViewModel @Inject constructor(
 
     fun updateCharacter(update: (CharacterEntity) -> CharacterEntity) {
         _characterState.value = update(_characterState.value)
+        _hasChanges.value = true
     }
 
     fun updateAvatarUri(uri: Uri?) {
         _avatarUri.value = uri
+        _hasChanges.value = true
     }
 
     fun saveCharacter(context: Context, onSuccess: () -> Unit = {}) {

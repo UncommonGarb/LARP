@@ -29,7 +29,7 @@ fun LorebookScreen(
     characterId: Long,
     viewModel: LorebookViewModel = hiltViewModel()
 ) {
-    val entries by viewModel.getLorebookEntries(characterId).collectAsState()
+    val entries by viewModel.entries.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(

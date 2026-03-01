@@ -1,5 +1,7 @@
 package com.airoleplay.app.ui.screens.chat
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -22,6 +24,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -38,8 +41,7 @@ fun ChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
-    val sheetState = rememberModalBottomSheetState()
-    var showSheet by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var attachedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val haptic = LocalHapticFeedback.current
@@ -59,70 +61,7 @@ fun ChatScreen(
 
     Scaffold(
         containerColor = DarkBackground,
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = DarkBackground,
-                    titleContentColor = TextPrimary
-                ),
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable {
-                            showSheet = true
-                        }
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(SurfaceCard)
-                        ) {
-                            if (uiState.character?.avatarImagePath != null) {
-                                AsyncImage(
-                                    model = uiState.character!!.avatarImagePath,
-                                    contentDescription = "Avatar",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = uiState.character?.name ?: "Loading...",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = TextPrimary
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val statusColor = when (uiState.connectionStatus) {
-                                    ConnectionStatus.CONNECTED -> SuccessGreen
-                                    ConnectionStatus.DISCONNECTED -> ErrorRed
-                                    ConnectionStatus.CONNECTING -> WarningYellow
-                                    else -> TextSecondary
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(statusColor, CircleShape)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = uiState.connectionStatus.name.lowercase().replaceFirstChar { it.uppercase() },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextSecondary
-                                )
-                            }
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                    }
-                }
-            )
-        },
+        contentWindowInsets = WindowInsets.statusBars,
         bottomBar = {
             Column(
                 modifier = Modifier
@@ -200,99 +139,187 @@ fun ChatScreen(
             }
         }
     ) { padding ->
-        if (showSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showSheet = false },
-                sheetState = sheetState,
-                containerColor = SurfaceCard,
-                contentColor = TextPrimary
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(top = 100.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 32.dp)
-                ) {
-                    ListItem(
-                        headlineContent = { Text("Persona") },
-                        leadingContent = { Icon(Icons.Default.Person, contentDescription = null) },
-                        modifier = Modifier.clickable {
-                            showSheet = false
-                            navController.navigate(Screen.PersonaSettings.route)
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    ListItem(
-                        headlineContent = { Text("Lorebook") },
-                        leadingContent = { Icon(Icons.Default.List, contentDescription = null) },
-                        modifier = Modifier.clickable {
-                            showSheet = false
-                            uiState.character?.id?.let {
-                                navController.navigate(Screen.Lorebook.createRoute(it))
-                            }
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    ListItem(
-                        headlineContent = { Text("Edit Character") },
-                        leadingContent = { Icon(Icons.Default.Edit, contentDescription = null) },
-                        modifier = Modifier.clickable {
-                            showSheet = false
-                            uiState.character?.id?.let {
-                                navController.navigate(Screen.Create.createRoute(it))
-                            }
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                    )
-                    ListItem(
-                        headlineContent = { Text("Chat History") },
-                        leadingContent = { Icon(Icons.Default.List, contentDescription = null) },
-                        modifier = Modifier.clickable {
-                            showSheet = false
-                            uiState.character?.id?.let {
-                                navController.navigate(Screen.CharacterDetail.createRoute(it))
-                            }
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                items(uiState.messages) { message ->
+                    MessageBubble(
+                        message = message,
+                        isUser = message.role == "user",
+                        avatarPath = if (message.role == "user") uiState.activePersona?.avatarImagePath else uiState.character?.avatarImagePath,
+                        onRegenerate = { viewModel.regenerateLastMessage() },
+                        onDelete = { viewModel.deleteMessage(message) },
+                        fetchAlternatives = { groupId -> viewModel.getSwipeAlternatives(groupId) },
+                        onSwipeAlternative = { viewModel.switchSwipeAlternative(message.swipeGroupId!!, it) }
                     )
                 }
-            }
-        }
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(uiState.messages) { message ->
-                MessageBubble(
-                    message = message,
-                    isUser = message.role == "user",
-                    avatarPath = if (message.role == "user") uiState.activePersona?.avatarImagePath else uiState.character?.avatarImagePath,
-                    onRegenerate = { viewModel.regenerateLastMessage() },
-                    onDelete = { viewModel.deleteMessage(message) },
-                    fetchAlternatives = { groupId -> viewModel.getSwipeAlternatives(groupId) },
-                    onSwipeAlternative = { viewModel.switchSwipeAlternative(message.swipeGroupId!!, it) }
-                )
+                if (uiState.isGenerating && uiState.partialGeneration.isNotEmpty()) {
+                    item {
+                        MessageBubble(
+                            message = ChatMessageEntity(
+                                sessionId = 0,
+                                role = "assistant",
+                                content = uiState.partialGeneration
+                            ),
+                            isUser = false,
+                            avatarPath = uiState.character?.avatarImagePath,
+                            isStreaming = true,
+                            onRegenerate = { },
+                            onDelete = { }
+                        )
+                    }
+                }
             }
 
-            if (uiState.isGenerating && uiState.partialGeneration.isNotEmpty()) {
-                item {
-                    MessageBubble(
-                        message = ChatMessageEntity(
-                            sessionId = 0,
-                            role = "assistant",
-                            content = uiState.partialGeneration
-                        ),
-                        isUser = false,
-                        avatarPath = uiState.character?.avatarImagePath,
-                        isStreaming = true,
-                        onRegenerate = { },
-                        onDelete = { }
-                    )
+            // Custom Sliding Header & Menu
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceCard)
+                    .animateContentSize()
+            ) {
+                AnimatedVisibility(
+                    visible = showMenu,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                    ) {
+                        // Menu Items
+                        ListItem(
+                            headlineContent = { Text("Persona") },
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(DarkBackground)
+                                ) {
+                                    if (uiState.activePersona?.avatarImagePath != null) {
+                                        AsyncImage(
+                                            model = uiState.activePersona!!.avatarImagePath,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Person, contentDescription = null, tint = AccentColor)
+                                    }
+                                }
+                            },
+                            modifier = Modifier.clickable {
+                                showMenu = false
+                                navController.navigate(Screen.PersonaSettings.route)
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                        ListItem(
+                            headlineContent = { Text("Lorebook") },
+                            leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = AccentColor) },
+                            modifier = Modifier.clickable {
+                                showMenu = false
+                                uiState.character?.id?.let {
+                                    navController.navigate(Screen.Lorebook.createRoute(it))
+                                }
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                        ListItem(
+                            headlineContent = { Text("Edit Character") },
+                            leadingContent = { Icon(Icons.Default.Edit, contentDescription = null, tint = AccentColor) },
+                            modifier = Modifier.clickable {
+                                showMenu = false
+                                uiState.character?.id?.let {
+                                    navController.navigate(Screen.Create.createRoute(it))
+                                }
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                        ListItem(
+                            headlineContent = { Text("Chat History") },
+                            leadingContent = { Icon(Icons.Default.History, contentDescription = null, tint = AccentColor) },
+                            modifier = Modifier.clickable {
+                                showMenu = false
+                                uiState.character?.id?.let {
+                                    navController.navigate(Screen.CharacterDetail.createRoute(it))
+                                }
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                        )
+                    }
+                }
+
+                // Header Row (moves down when menu is revealed)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .clickable { showMenu = !showMenu }
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(if (showMenu) 64.dp else 40.dp)
+                            .clip(CircleShape)
+                            .background(DarkBackground)
+                            .animateContentSize()
+                    ) {
+                        if (uiState.character?.avatarImagePath != null) {
+                            AsyncImage(
+                                model = uiState.character!!.avatarImagePath,
+                                contentDescription = "Avatar",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = uiState.character?.name ?: "Loading...",
+                            style = if (showMenu) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (!showMenu) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val statusColor = when (uiState.connectionStatus) {
+                                    ConnectionStatus.CONNECTED -> SuccessGreen
+                                    ConnectionStatus.DISCONNECTED -> ErrorRed
+                                    ConnectionStatus.CONNECTING -> WarningYellow
+                                    else -> TextSecondary
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(statusColor, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = uiState.connectionStatus.name.lowercase().replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -427,30 +454,45 @@ fun MessageBubble(
                 }
             }
 
-            DropdownMenu(
-                expanded = showOptions,
-                onDismissRequest = { showOptions = false }
+            // Custom themed context menu
+            AnimatedVisibility(
+                visible = showOptions,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                if (!isUser) {
-                    DropdownMenuItem(
-                        text = { Text("Regenerate") },
-                        onClick = {
-                            showOptions = false
-                            onRegenerate()
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(top = 4.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(modifier = Modifier.width(IntrinsicSize.Min)) {
+                        if (!isUser) {
+                            ContextMenuItem(
+                                text = "Regenerate",
+                                icon = Icons.Default.Refresh,
+                                onClick = {
+                                    showOptions = false
+                                    onRegenerate()
+                                }
+                            )
                         }
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text("Copy Text") },
-                    onClick = { showOptions = false }
-                )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = ErrorRed) },
-                    onClick = {
-                        showOptions = false
-                        onDelete()
+                        ContextMenuItem(
+                            text = "Copy Text",
+                            icon = Icons.Default.ContentCopy,
+                            onClick = { showOptions = false }
+                        )
+                        ContextMenuItem(
+                            text = "Delete",
+                            icon = Icons.Default.Delete,
+                            color = ErrorRed,
+                            onClick = {
+                                showOptions = false
+                                onDelete()
+                            }
+                        )
                     }
-                )
+                }
             }
         }
 
@@ -472,5 +514,25 @@ fun MessageBubble(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ContextMenuItem(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color = TextPrimary,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = if (color == ErrorRed) color else AccentColor, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(text, color = color, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
     }
 }

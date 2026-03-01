@@ -6,12 +6,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,12 +34,20 @@ fun CreateScreen(
 ) {
     val character by viewModel.characterState.collectAsState()
     val avatarUri by viewModel.avatarUri.collectAsState()
+    val hasChanges by viewModel.hasChanges.collectAsState()
     val scrollState = rememberScrollState()
+    var showDiscardDialog by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
         viewModel.updateAvatarUri(uri)
+    }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    BackHandler(enabled = hasChanges) {
+        showDiscardDialog = true
     }
 
     Scaffold(
@@ -52,8 +60,19 @@ fun CreateScreen(
                 ),
                 title = { Text(if (character.id == 0L) "Create Character" else "Edit Character") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = {
+                        if (hasChanges) showDiscardDialog = true else navController.popBackStack()
+                    }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        viewModel.saveCharacter(context) {
+                            navController.popBackStack()
+                        }
+                    }) {
+                        Icon(Icons.Default.Done, contentDescription = "Save", tint = AccentColor)
                     }
                 }
             )
@@ -149,7 +168,6 @@ fun CreateScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            val context = androidx.compose.ui.platform.LocalContext.current
             Button(
                 onClick = {
                     viewModel.saveCharacter(context) {
@@ -163,6 +181,30 @@ fun CreateScreen(
                 Text("Save Character", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
+    }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("Discard Changes?") },
+            text = { Text("You have unsaved changes. Are you sure you want to discard them?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardDialog = false
+                    navController.popBackStack()
+                }) {
+                    Text("Discard", color = ErrorRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = SurfaceCard,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary
+        )
     }
 }
 
