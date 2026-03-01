@@ -2,9 +2,11 @@ package com.airoleplay.app.ui.navigation
 
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
-    object Discover : Screen("discover")
+    object Characters : Screen("characters")
     object Chats : Screen("chats")
-    object Create : Screen("create")
+    object Create : Screen("create?characterId={characterId}") {
+        fun createRoute(characterId: Long? = null) = if (characterId != null) "create?characterId=$characterId" else "create"
+    }
     object Settings : Screen("settings")
     object CharacterDetail : Screen("character_detail/{characterId}") {
         fun createRoute(characterId: Long) = "character_detail/$characterId"
@@ -16,4 +18,9 @@ sealed class Screen(val route: String) {
         fun createRoute(connectionId: Long) = "connection_settings/$connectionId"
     }
     object PersonaSettings : Screen("persona_settings")
+    object BackendList : Screen("backend_list")
+    object GlobalGenerationSettings : Screen("global_generation_settings")
+    object Lorebook : Screen("lorebook/{characterId}") {
+        fun createRoute(characterId: Long) = "lorebook/$characterId"
+    }
 }

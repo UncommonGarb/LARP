@@ -229,10 +229,24 @@ class ChatViewModel @Inject constructor(
 
             // Add required Stop Sequences
             val personaName = state.activePersona?.name ?: "User"
-            val stopSeqs = listOf(
+            val stopSeqs = mutableListOf(
                 "$personaName:", "\n$personaName", "User:", "\nUser",
                 "${char.name}:", "\n${char.name}"
             )
+
+            // Add format specific stop sequences
+            if (conn.type.uppercase() == "KOBOLDCPP") {
+                when (conn.instructFormat.uppercase().replace(" ", "")) {
+                    "CHATML" -> stopSeqs.addAll(listOf("<|im_end|>", "<|im_start|>", "<|im_start|>assistant", "<|im_start|>user", "<|im_start|>system"))
+                    "LLAMA3" -> stopSeqs.addAll(listOf("<|eot_id|>", "<|start_header_id|>", "<|begin_of_text|>"))
+                    "ALPACA" -> stopSeqs.addAll(listOf("### Instruction:", "### Response:", "### Input:"))
+                    "MISTRAL" -> stopSeqs.addAll(listOf("[INST]", "[/INST]"))
+                }
+            } else if (conn.type.uppercase() == "OLLAMA") {
+                 // Ollama handles tokens internally but extra stop sequences can't hurt
+                 stopSeqs.addAll(listOf("<|im_end|>", "<|im_start|>", "<|eot_id|>", "<|start_header_id|>", "### Instruction:", "### Response:", "[INST]"))
+            }
+
             currentGenSettings = currentGenSettings.copy(stopSequences = stopSeqs)
 
             val promptMessages = promptBuilder.buildPromptMessages(
@@ -301,6 +315,12 @@ class ChatViewModel @Inject constructor(
                 swipeGroupId = groupToUse
             )
             chatDao.insertMessage(aiMsg)
+
+            // Wait for DB to update and Flow to emit before clearing partial
+            // This prevents the visual "pop"
+            chatDao.getMessagesForSession(sessionId).first { msgs ->
+                msgs.any { it.swipeGroupId == groupToUse && it.content.trim() == finalText.trim() }
+            }
         }
         _uiState.update { it.copy(isGenerating = false, partialGeneration = "") }
     }

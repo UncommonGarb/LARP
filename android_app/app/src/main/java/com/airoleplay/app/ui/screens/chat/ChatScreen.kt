@@ -1,5 +1,7 @@
 package com.airoleplay.app.ui.screens.chat
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -10,6 +12,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,10 +24,12 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.airoleplay.app.utils.ImageUtils
 import com.airoleplay.app.data.local.entity.ChatMessageEntity
 import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
@@ -37,6 +42,7 @@ fun ChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
+    var showMenu by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var attachedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val haptic = LocalHapticFeedback.current
@@ -56,42 +62,41 @@ fun ChatScreen(
 
     Scaffold(
         containerColor = DarkBackground,
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = DarkBackground,
-                    titleContentColor = TextPrimary
-                ),
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable {
-                            uiState.character?.id?.let {
-                                navController.navigate(Screen.CharacterDetail.createRoute(it))
-                            }
-                        }
+                        modifier = Modifier.fillMaxWidth().clickable { showMenu = !showMenu }
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
-                                .background(SurfaceCard)
+                                .background(DarkBackground)
                         ) {
-                            if (uiState.character?.avatarImagePath != null) {
+                            val avatarModel = remember(uiState.character?.avatarImagePath) {
+                                ImageUtils.resolveModel(uiState.character?.avatarImagePath)
+                            }
+                            if (avatarModel != null) {
                                 AsyncImage(
-                                    model = uiState.character!!.avatarImagePath,
+                                    model = avatarModel,
                                     contentDescription = "Avatar",
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
                         }
+
                         Spacer(modifier = Modifier.width(12.dp))
+
                         Column {
                             Text(
                                 text = uiState.character?.name ?: "Loading...",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = TextPrimary
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 val statusColor = when (uiState.connectionStatus) {
@@ -117,18 +122,19 @@ fun ChatScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceCard)
             )
         },
         bottomBar = {
             Column(
                 modifier = Modifier
                     .background(DarkBackground)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
                     .navigationBarsPadding()
                     .imePadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 if (attachedImageUri != null) {
                     Box(modifier = Modifier.padding(bottom = 8.dp)) {
@@ -199,40 +205,127 @@ fun ChatScreen(
             }
         }
     ) { padding ->
-        LazyColumn(
-            state = listState,
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(uiState.messages) { message ->
-                MessageBubble(
-                    message = message,
-                    isUser = message.role == "user",
-                    avatarPath = if (message.role == "user") uiState.activePersona?.avatarImagePath else uiState.character?.avatarImagePath,
-                    onRegenerate = { viewModel.regenerateLastMessage() },
-                    onDelete = { viewModel.deleteMessage(message) },
-                    fetchAlternatives = { groupId -> viewModel.getSwipeAlternatives(groupId) },
-                    onSwipeAlternative = { viewModel.switchSwipeAlternative(message.swipeGroupId!!, it) }
-                )
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(uiState.messages) { message ->
+                    MessageBubble(
+                        message = message,
+                        isUser = message.role == "user",
+                        avatarPath = if (message.role == "user") uiState.activePersona?.avatarImagePath else uiState.character?.avatarImagePath,
+                        onRegenerate = { viewModel.regenerateLastMessage() },
+                        onDelete = { viewModel.deleteMessage(message) },
+                        fetchAlternatives = { groupId -> viewModel.getSwipeAlternatives(groupId) },
+                        onSwipeAlternative = { viewModel.switchSwipeAlternative(message.swipeGroupId!!, it) }
+                    )
+                }
+
+                if (uiState.isGenerating && uiState.partialGeneration.isNotEmpty()) {
+                    item {
+                        MessageBubble(
+                            message = ChatMessageEntity(
+                                sessionId = 0,
+                                role = "assistant",
+                                content = uiState.partialGeneration
+                            ),
+                            isUser = false,
+                            avatarPath = uiState.character?.avatarImagePath,
+                            isStreaming = true,
+                            onRegenerate = { },
+                            onDelete = { }
+                        )
+                    }
+                }
             }
 
-            if (uiState.isGenerating && uiState.partialGeneration.isNotEmpty()) {
-                item {
-                    MessageBubble(
-                        message = ChatMessageEntity(
-                            sessionId = 0,
-                            role = "assistant",
-                            content = uiState.partialGeneration
-                        ),
-                        isUser = false,
-                        avatarPath = uiState.character?.avatarImagePath,
-                        isStreaming = true,
-                        onRegenerate = { },
-                        onDelete = { }
+            // Custom Sliding Menu (Slides down from beneath header as overlay)
+            AnimatedVisibility(
+                visible = showMenu,
+                enter = slideInVertically(initialOffsetY = { -it }),
+                exit = slideOutVertically(targetOffsetY = { -it }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceCard)
+                        .padding(bottom = 16.dp)
+                ) {
+                    // Menu Items
+                    ListItem(
+                        headlineContent = { Text("Persona") },
+                        leadingContent = {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(DarkBackground)
+                            ) {
+                                val personaModel = remember(uiState.activePersona?.avatarImagePath) {
+                                    ImageUtils.resolveModel(uiState.activePersona?.avatarImagePath)
+                                }
+                                if (personaModel != null) {
+                                    AsyncImage(
+                                        model = personaModel,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(Icons.Default.Person, contentDescription = null, tint = AccentColor)
+                                }
+                            }
+                        },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            navController.navigate(Screen.PersonaSettings.route)
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Lorebook") },
+                        leadingContent = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = AccentColor) },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.Lorebook.createRoute(it))
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Edit Character") },
+                        leadingContent = { Icon(Icons.Default.Edit, contentDescription = null, tint = AccentColor) },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.Create.createRoute(it))
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Chat History") },
+                        leadingContent = { Icon(Icons.Default.History, contentDescription = null, tint = AccentColor) },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            uiState.character?.id?.let {
+                                navController.navigate(Screen.CharacterDetail.createRoute(it))
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                 }
             }
@@ -265,9 +358,12 @@ fun MessageBubble(
                     .clip(CircleShape)
                     .background(SurfaceCard)
             ) {
-                if (avatarPath != null) {
+                val avatarModel = remember(avatarPath) {
+                    ImageUtils.resolveModel(avatarPath)
+                }
+                if (avatarModel != null) {
                     AsyncImage(
-                        model = avatarPath,
+                        model = avatarModel,
                         contentDescription = "Avatar",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -368,30 +464,45 @@ fun MessageBubble(
                 }
             }
 
-            DropdownMenu(
-                expanded = showOptions,
-                onDismissRequest = { showOptions = false }
+            // Custom themed context menu
+            AnimatedVisibility(
+                visible = showOptions,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                if (!isUser) {
-                    DropdownMenuItem(
-                        text = { Text("Regenerate") },
-                        onClick = {
-                            showOptions = false
-                            onRegenerate()
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(top = 4.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(modifier = Modifier.width(IntrinsicSize.Min)) {
+                        if (!isUser) {
+                            ContextMenuItem(
+                                text = "Regenerate",
+                                icon = Icons.Default.Refresh,
+                                onClick = {
+                                    showOptions = false
+                                    onRegenerate()
+                                }
+                            )
                         }
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text("Copy Text") },
-                    onClick = { showOptions = false }
-                )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = ErrorRed) },
-                    onClick = {
-                        showOptions = false
-                        onDelete()
+                        ContextMenuItem(
+                            text = "Copy Text",
+                            icon = Icons.Default.ContentCopy,
+                            onClick = { showOptions = false }
+                        )
+                        ContextMenuItem(
+                            text = "Delete",
+                            icon = Icons.Default.Delete,
+                            color = ErrorRed,
+                            onClick = {
+                                showOptions = false
+                                onDelete()
+                            }
+                        )
                     }
-                )
+                }
             }
         }
 
@@ -403,9 +514,12 @@ fun MessageBubble(
                     .clip(CircleShape)
                     .background(SurfaceCard)
             ) {
-                if (avatarPath != null) {
+                val avatarModel = remember(avatarPath) {
+                    ImageUtils.resolveModel(avatarPath)
+                }
+                if (avatarModel != null) {
                     AsyncImage(
-                        model = avatarPath,
+                        model = avatarModel,
                         contentDescription = "User Avatar",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -413,5 +527,25 @@ fun MessageBubble(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ContextMenuItem(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color = TextPrimary,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = if (color == ErrorRed) color else AccentColor, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(text, color = color, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
     }
 }

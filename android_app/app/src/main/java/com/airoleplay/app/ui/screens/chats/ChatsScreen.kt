@@ -70,10 +70,10 @@ fun ChatsScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(
-                        onClick = { navController.navigate(Screen.Discover.route) },
+                        onClick = { navController.navigate(Screen.Characters.route) },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
                     ) {
-                        Text("Discover Characters")
+                        Text("Explore Characters")
                     }
                 }
             }

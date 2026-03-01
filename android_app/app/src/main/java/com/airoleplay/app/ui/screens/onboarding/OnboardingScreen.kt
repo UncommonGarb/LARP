@@ -27,7 +27,7 @@ fun OnboardingScreen(
 
     LaunchedEffect(isOnboarded) {
         if (isOnboarded) {
-            navController.navigate(Screen.Discover.route) {
+            navController.navigate(Screen.Characters.route) {
                 popUpTo(0) { inclusive = true }
             }
         }
@@ -125,7 +125,7 @@ fun OnboardingScreen(
                     Button(
                         onClick = {
                             viewModel.saveInitialConnection(baseUrl, type)
-                            navController.navigate(Screen.Discover.route) {
+                            navController.navigate(Screen.Characters.route) {
                                 popUpTo(0) { inclusive = true } // Clear stack
                             }
                         },
@@ -134,7 +134,7 @@ fun OnboardingScreen(
                         Text("Connect & Finish")
                     }
                     TextButton(onClick = {
-                        navController.navigate(Screen.Discover.route) {
+                        navController.navigate(Screen.Characters.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     }) {

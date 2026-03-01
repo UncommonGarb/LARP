@@ -81,11 +81,12 @@ fun PersonaScreen(
             }
         }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
         if (showAddDialog) {
             AddPersonaDialog(
                 onDismiss = { showAddDialog = false },
                 onAdd = { name, desc, uri ->
-                    viewModel.addPersona(name, desc, uri)
+                viewModel.addPersona(context, name, desc, uri)
                     showAddDialog = false
                 }
             )
