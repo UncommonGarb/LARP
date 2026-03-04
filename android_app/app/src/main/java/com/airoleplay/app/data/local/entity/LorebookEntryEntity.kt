@@ -25,5 +25,8 @@ data class LorebookEntryEntity(
     val content: String,
     val insertionOrder: Int = 0,
     val isEnabled: Boolean = true,
-    val isConstant: Boolean = false // Always inject regardless of keywords
+    val isConstant: Boolean = false, // Always inject regardless of keywords
+    val category: String = "GENERAL", // PEOPLE, PLACES, GENERAL
+    val metadataJson: String? = null, // For relationship metadata
+    val lastTriggeredAt: Long = 0
 )

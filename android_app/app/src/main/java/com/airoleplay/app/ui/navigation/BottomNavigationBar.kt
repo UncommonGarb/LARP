@@ -2,8 +2,8 @@ package com.airoleplay.app.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -30,7 +30,7 @@ fun BottomNavigationBar(navController: NavController, currentRoute: String?) {
             Screen.Settings
         )
         val icons = listOf(
-            Icons.Default.Menu,
+            Icons.Default.Chat,
             Icons.Default.Add,
             Icons.Default.Home,
             Icons.Default.Settings

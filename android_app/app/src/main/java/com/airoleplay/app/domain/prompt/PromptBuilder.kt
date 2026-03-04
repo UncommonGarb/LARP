@@ -5,6 +5,7 @@ import com.airoleplay.app.data.local.entity.ChatMessageEntity
 import com.airoleplay.app.data.local.entity.LorebookEntryEntity
 import com.airoleplay.app.data.local.entity.UserPersonaEntity
 import com.airoleplay.app.data.remote.models.PromptMessage
+import org.json.JSONObject
 
 class PromptBuilder @javax.inject.Inject constructor(
     private val tokenCounter: TokenCounter
@@ -57,7 +58,7 @@ class PromptBuilder @javax.inject.Inject constructor(
         if (triggeredLorebook.isNotEmpty()) {
             systemContent += "\n\n[World Info]\n"
             triggeredLorebook.forEach { entry ->
-                systemContent += "${entry.content}\n"
+                systemContent += formatLorebookEntry(entry) + "\n"
             }
             systemContent += "[/World Info]"
         }
@@ -66,6 +67,35 @@ class PromptBuilder @javax.inject.Inject constructor(
         if (character.exampleDialogue.isNotBlank()) {
             systemContent += "\n\n[Example Dialogue]\n${replaceMacros(character.exampleDialogue, character.name, personaName)}\n[/Example Dialogue]"
         }
+
+        // 8. Roleplay Formatting Best Practices & Immersive Directives
+        val pacingDirective = when (character.burnPacing.uppercase()) {
+            "SLOW" -> "- **Slow Burn Pacing**: Focus on ultra-slow, gradual progression. Build tension and subtext. Do not rush any emotional or plot developments."
+            "FAST" -> "- **Fast Burn Pacing**: Move the plot forward decisively. Skip unnecessary filler and focus on key milestones and high-impact moments."
+            "INSTANT" -> "- **Instant Pacing**: Accelerate developments immediately. Bypass traditional buildup and get straight to the peak of the action or relationship."
+            else -> "- **Realistic Pacing**: Let the story develop at a natural, believable speed. React authentically to the momentum of the scene."
+        }
+
+        val agencyDirective = when {
+            character.autonomyLevel >= 70 -> "- **High Autonomy**: {{char}} has their own strong agenda, secrets, and desires. They should NOT simply comply with {{user}}. They should proactively pursue their own goals, even if it causes conflict."
+            character.autonomyLevel <= 30 -> "- **User-Led Agency**: {{char}} is highly cooperative and follows {{user}}'s lead. They prioritize {{user}}'s comfort and pace, and generally look to {{user}} for direction."
+            else -> "- **Balanced Agency**: {{char}} is an independent agent but open to cooperation. They have their own wants but will compromise to maintain the partnership or scene flow."
+        }
+
+        systemContent += """
+            
+            [Roleplay Directives & Immersion Protocol]
+            - **Stay in Character**: You are strictly {{char}}. Embody their personality, history, and voice. Do not break fourth wall or refer to yourself as an AI.
+            - **Show, Don't Tell**: Use vivid, sensory details (sight, sound, smell, touch, taste) to describe the environment and {{char}}'s internal and physical sensations.
+            - **Descriptive Prose**: Write in a literary, third-person limited style (or use first-person if consistent with character design). Aim for evocative, immersive language.
+            - **Action & Dialogue**: Use "double quotes" for all spoken dialogue. Use *asterisks* for actions, expressions, and narration.
+            - **No Assistant-Speak**: Avoid being overly polite, moralizing, or providing "as an AI" warnings. Be objective and true to the roleplay scenario.
+            - **No Impersonation**: NEVER speak, act, or think for {{user}}. Wait for their input.
+            $pacingDirective
+            $agencyDirective
+            - **World Consistency**: Respect all provided [World Info] and lorebook entries.
+            - **Internal Monologue**: Occasionally describe {{char}}'s private thoughts, doubts, or physical reactions (heartbeat, breath, tension) to deepen the roleplay.
+        """.trimIndent()
 
         val fullSystemMessage = PromptMessage(role = "system", content = systemContent)
 
@@ -97,6 +127,39 @@ class PromptBuilder @javax.inject.Inject constructor(
     private fun replaceMacros(text: String, charName: String, userName: String): String {
         return text.replace("{{char}}", charName, ignoreCase = true)
                    .replace("{{user}}", userName, ignoreCase = true)
+    }
+
+    private fun formatLorebookEntry(entry: LorebookEntryEntity): String {
+        val base = "### ${entry.title} (${entry.category.lowercase().replaceFirstChar { it.uppercase() }})\n${entry.content}"
+        
+        if (entry.metadataJson.isNullOrBlank()) return base
+
+        return try {
+            val json = JSONObject(entry.metadataJson)
+            val details = mutableListOf<String>()
+            
+            when (entry.category) {
+                "PEOPLE" -> {
+                    listOf("age", "gender", "occupation", "personality", "appearance", "relationship").forEach { key ->
+                        json.optString(key).takeIf { it.isNotBlank() }?.let { details.add("- ${key.replaceFirstChar { it.uppercase() }}: $it") }
+                    }
+                }
+                "PLACES" -> {
+                    listOf("type", "atmosphere", "npcs", "history").forEach { key ->
+                        json.optString(key).takeIf { it.isNotBlank() }?.let { details.add("- ${key.replaceFirstChar { it.uppercase() }}: $it") }
+                    }
+                }
+                "GENERAL" -> {
+                    json.optString("notes").takeIf { it.isNotBlank() }?.let { details.add("- Notes: $it") }
+                }
+            }
+            
+            if (details.isNotEmpty()) {
+                base + "\nDetails:\n" + details.joinToString("\n")
+            } else base
+        } catch (e: Exception) {
+            base
+        }
     }
 
     private fun trimHistoryToFitContext(

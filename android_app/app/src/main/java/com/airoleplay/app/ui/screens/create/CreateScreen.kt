@@ -13,6 +13,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -214,6 +217,67 @@ fun CreateScreen(
                 onValueChange = { newVal -> viewModel.updateCharacter { it.copy(postHistoryInstructions = newVal) } },
                 singleLine = false,
                 placeholder = "Always stay in character..."
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Divider(color = SurfaceCard, modifier = Modifier.padding(vertical = 8.dp))
+
+            // Burn Pacing
+            Text("Pacing / Burn Rate", color = TextPrimary, style = MaterialTheme.typography.titleSmall)
+            Text("Controls how quickly relationships and plots develop.", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            val pacingOptions = listOf("SLOW", "REALISTIC", "FAST", "INSTANT")
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                pacingOptions.forEachIndexed { index, label ->
+                    SegmentedButton(
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = pacingOptions.size),
+                        onClick = { viewModel.updateCharacter { it.copy(burnPacing = label) } },
+                        selected = character.burnPacing == label,
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = AccentColor,
+                            activeContentColor = Color.White,
+                            inactiveContainerColor = SurfaceCard,
+                            inactiveContentColor = TextSecondary
+                        )
+                    ) {
+                        Text(label.lowercase().capitalize(), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Autonomy / Agency
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Agency / Autonomy", color = TextPrimary, style = MaterialTheme.typography.titleSmall)
+                    val agencyText = when {
+                        character.autonomyLevel < 30 -> "User-Led (Compliant)"
+                        character.autonomyLevel < 70 -> "Balanced (Cooperative)"
+                        else -> "Independent (Has own agenda)"
+                    }
+                    Text(agencyText, color = AccentColor, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                }
+                Text("${character.autonomyLevel}%", color = TextPrimary, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            }
+            Text("Decide if the character follows your lead or has their own secret wants and desires.", color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+            
+            Slider(
+                value = character.autonomyLevel.toFloat(),
+                onValueChange = { newValue -> viewModel.updateCharacter { it.copy(autonomyLevel = newValue.toInt()) } },
+                valueRange = 0f..100f,
+                steps = 10,
+                modifier = Modifier.fillMaxWidth(),
+                colors = SliderDefaults.colors(
+                    thumbColor = AccentColor,
+                    activeTrackColor = AccentColor,
+                    inactiveTrackColor = SurfaceCard
+                )
             )
 
             Spacer(modifier = Modifier.height(32.dp))

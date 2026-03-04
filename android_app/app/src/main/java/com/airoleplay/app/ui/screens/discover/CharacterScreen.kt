@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -22,10 +23,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.airoleplay.app.data.local.entity.CharacterEntity
+import com.airoleplay.app.ui.components.CharacterAvatar
 import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
 import com.airoleplay.app.utils.ImageUtils
@@ -44,79 +50,106 @@ fun CharacterScreen(
     val selectedTag by viewModel.selectedTag.collectAsState()
     val activePersona by viewModel.activePersona.collectAsState()
 
+    val importResult by viewModel.importResult.collectAsState()
+    val context = LocalContext.current
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importCharacter(it) }
+    }
+
+    LaunchedEffect(importResult) {
+        importResult?.let { result ->
+            if (result.isSuccess) {
+                Toast.makeText(context, "Character imported successfully", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Import failed: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+            }
+            viewModel.clearImportResult()
+        }
+    }
+
     Scaffold(
         containerColor = DarkBackground,
         topBar = {
             CharacterTopBar(
                 searchQuery = searchQuery,
                 onSearchChange = viewModel::updateSearchQuery,
-                personaAvatarPath = activePersona?.avatarImagePath
+                persona = activePersona,
+                onImportClick = { importLauncher.launch(arrayOf("application/json", "image/png", "application/x-yaml", "text/yaml", "application/yaml", "*/*")) }
             )
         }
     ) { padding ->
-        Column(
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(bottom = contentPadding.calculateBottomPadding())
+                .padding(bottom = contentPadding.calculateBottomPadding()),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Tags Filter Row
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(tags) { tag ->
-                    FilterChip(
-                        selected = tag == selectedTag,
-                        onClick = { viewModel.selectTag(tag) },
-                        label = { Text(tag) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentColor,
-                            selectedLabelColor = Color.White
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                LazyRow(
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(tags) { tag ->
+                        FilterChip(
+                            selected = tag == selectedTag,
+                            onClick = { viewModel.selectTag(tag) },
+                            label = { Text(tag) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AccentColor,
+                                selectedLabelColor = Color.White
+                            )
                         )
-                    )
+                    }
                 }
             }
 
             // Recents Section (Only show if there are recents)
             if (recentCharacters.isNotEmpty()) {
-                Text(
-                    text = "Continue Chatting",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(recentCharacters) { char ->
-                        RecentCharacterCard(char = char) {
-                            navController.navigate(Screen.CharacterDetail.createRoute(char.id))
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "Continue Chatting",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(recentCharacters) { char ->
+                            RecentCharacterCard(char = char) {
+                                navController.navigate(Screen.CharacterDetail.createRoute(char.id))
+                            }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
 
-            // All Characters Grid
-            Text(
-                text = "All Characters",
-                style = MaterialTheme.typography.labelLarge,
-                color = TextSecondary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+            // All Characters Header
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text(
+                    text = "All Characters",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(characters) { char ->
-                    CharacterGridCard(char = char) {
-                        navController.navigate(Screen.CharacterDetail.createRoute(char.id))
-                    }
+            items(characters) { char ->
+                CharacterGridCard(char = char) {
+                    navController.navigate(Screen.CharacterDetail.createRoute(char.id))
                 }
             }
         }
@@ -127,7 +160,8 @@ fun CharacterScreen(
 fun CharacterTopBar(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    personaAvatarPath: String?
+    persona: com.airoleplay.app.data.local.entity.UserPersonaEntity?,
+    onImportClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -146,31 +180,24 @@ fun CharacterTopBar(
                 color = TextPrimary
             )
 
-            // Persona Avatar
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceCard)
-            ) {
-                val model = remember(personaAvatarPath) {
-                    ImageUtils.resolveModel(personaAvatarPath)
-                }
-                if (model != null) {
-                    AsyncImage(
-                        model = model,
-                        contentDescription = "Active Persona",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Import Button
+                IconButton(onClick = onImportClick) {
                     Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = TextSecondary,
-                        modifier = Modifier.align(Alignment.Center)
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Import Character",
+                        tint = AccentColor
                     )
                 }
+                
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Persona Avatar
+                CharacterAvatar(
+                    name = persona?.name ?: "User",
+                    avatarPath = persona?.avatarImagePath,
+                    size = 40.dp
+                )
             }
         }
 
@@ -204,24 +231,13 @@ fun RecentCharacterCard(char: CharacterEntity, onClick: () -> Unit) {
             .background(SurfaceCard)
             .clickable(onClick = onClick)
     ) {
-        val model = remember(char.avatarImagePath) {
-            ImageUtils.resolveModel(char.avatarImagePath)
-        }
-        if (model != null) {
-            AsyncImage(
-                model = model,
-                contentDescription = char.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(48.dp))
-            }
-        }
+        CharacterAvatar(
+            name = char.name,
+            avatarPath = char.avatarImagePath,
+            modifier = Modifier.fillMaxSize(),
+            size = 120.dp,
+            shape = RoundedCornerShape(12.dp)
+        )
         // Gradient overlay
         Box(
             modifier = Modifier
@@ -256,24 +272,13 @@ fun CharacterGridCard(char: CharacterEntity, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = SurfaceCard)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            val model = remember(char.avatarImagePath) {
-                ImageUtils.resolveModel(char.avatarImagePath)
-            }
-            if (model != null) {
-                AsyncImage(
-                    model = model,
-                    contentDescription = char.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(64.dp))
-                }
-            }
+            CharacterAvatar(
+                name = char.name,
+                avatarPath = char.avatarImagePath,
+                modifier = Modifier.fillMaxSize(),
+                size = 220.dp,
+                shape = RoundedCornerShape(16.dp)
+            )
             // Gradient overlay
             Box(
                 modifier = Modifier

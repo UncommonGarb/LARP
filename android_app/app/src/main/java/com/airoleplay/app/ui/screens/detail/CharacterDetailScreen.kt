@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.airoleplay.app.ui.components.CharacterAvatar
 import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
 
@@ -95,11 +96,11 @@ fun CharacterDetailScreen(
                         .fillMaxWidth()
                         .height(300.dp)
                 ) {
-                    AsyncImage(
-                        model = char.avatarImagePath,
-                        contentDescription = char.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                    CharacterAvatar(
+                        name = char.name,
+                        avatarPath = char.avatarImagePath,
+                        modifier = Modifier.fillMaxSize(),
+                        size = 300.dp
                     )
                     // Gradient Overlay
                     Box(

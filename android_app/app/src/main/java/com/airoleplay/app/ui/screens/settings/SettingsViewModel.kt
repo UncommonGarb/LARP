@@ -76,4 +76,27 @@ class SettingsViewModel @Inject constructor(
             settingsDao.insertGlobalSettings(currentSettings.copy(globalSystemPrompt = newPrompt))
         }
     }
+
+    fun updateGlobalGenSettings(
+        temperature: Float? = null,
+        topP: Float? = null,
+        topK: Int? = null,
+        repetitionPenalty: Float? = null,
+        maxNewTokens: Int? = null,
+        contextSizeLimit: Int? = null
+    ) {
+        viewModelScope.launch {
+            val current = globalSettings.value ?: GlobalSettingsEntity()
+            settingsDao.insertGlobalSettings(
+                current.copy(
+                    defaultTemperature = temperature ?: current.defaultTemperature,
+                    defaultTopP = topP ?: current.defaultTopP,
+                    defaultTopK = topK ?: current.defaultTopK,
+                    defaultRepetitionPenalty = repetitionPenalty ?: current.defaultRepetitionPenalty,
+                    defaultMaxNewTokens = maxNewTokens ?: current.defaultMaxNewTokens,
+                    defaultContextSizeLimit = contextSizeLimit ?: current.defaultContextSizeLimit
+                )
+            )
+        }
+    }
 }

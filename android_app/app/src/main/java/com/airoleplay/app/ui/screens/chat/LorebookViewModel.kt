@@ -18,11 +18,22 @@ class LorebookViewModel @Inject constructor(
 
     val characterId: Long = savedStateHandle.get<String>("characterId")?.toLongOrNull() ?: -1L
 
+    private val _selectedCategory = MutableStateFlow("GENERAL")
+    val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
+
     val entries: StateFlow<List<LorebookEntryEntity>> = if (characterId != -1L) {
-        settingsDao.getLorebookEntriesForCharacter(characterId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        combine(
+            settingsDao.getLorebookEntriesForCharacter(characterId),
+            _selectedCategory
+        ) { entries, category ->
+            entries.filter { it.category == category }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     } else {
         MutableStateFlow(emptyList())
+    }
+
+    fun setCategory(category: String) {
+        _selectedCategory.value = category
     }
 
     fun addLorebookEntry(entry: LorebookEntryEntity) {

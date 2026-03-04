@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
+import com.airoleplay.app.ui.components.CharacterAvatar
 import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
 
@@ -136,29 +136,11 @@ fun ChatHistoryRow(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(CircleShape)
-                .background(SurfaceCard)
-        ) {
-            if (item.character.avatarImagePath != null) {
-                AsyncImage(
-                    model = item.character.avatarImagePath,
-                    contentDescription = item.character.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Text(
-                    text = item.character.name.firstOrNull()?.toString() ?: "?",
-                    color = AccentColor,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
-        }
+        CharacterAvatar(
+            name = item.character.name,
+            avatarPath = item.character.avatarImagePath,
+            size = 52.dp
+        )
 
         Spacer(modifier = Modifier.width(16.dp))
 

@@ -57,4 +57,21 @@ class PersonaViewModel @Inject constructor(
             }
         }
     }
+
+    fun updatePersona(context: Context, persona: UserPersonaEntity, newName: String, newDescription: String, newAvatarUri: Uri?) {
+        viewModelScope.launch {
+            val imagePath = if (newAvatarUri != null) {
+                FileUtils.saveImageToInternalStorage(context, newAvatarUri)
+            } else {
+                persona.avatarImagePath
+            }
+            
+            val updatedPersona = persona.copy(
+                name = newName,
+                description = newDescription,
+                avatarImagePath = imagePath
+            )
+            settingsDao.updatePersona(updatedPersona)
+        }
+    }
 }

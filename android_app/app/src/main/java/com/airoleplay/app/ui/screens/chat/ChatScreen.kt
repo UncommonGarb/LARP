@@ -20,10 +20,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.SpanStyle
@@ -38,6 +41,9 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.airoleplay.app.utils.ImageUtils
 import com.airoleplay.app.data.local.entity.ChatMessageEntity
+import com.airoleplay.app.data.local.entity.LorebookEntryEntity
+import com.airoleplay.app.domain.prompt.PromptBuilder
+import com.airoleplay.app.ui.components.CharacterAvatar
 import com.airoleplay.app.ui.navigation.Screen
 import com.airoleplay.app.ui.theme.*
 import kotlinx.coroutines.launch
@@ -51,6 +57,7 @@ fun ChatScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     var showMenu by remember { mutableStateOf(false) }
+    var showMemoriesPanel by remember { mutableStateOf(false) }
     var inputText by remember { mutableStateOf("") }
     var attachedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var isOocMode by remember { mutableStateOf(false) }
@@ -71,26 +78,31 @@ fun ChatScreen(
         }
     }
 
-    var autoScrollEnabled by remember { mutableStateOf(true) }
+
+    val isImeVisible = WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
 
     val isAtBottom by remember {
         derivedStateOf {
-            val lastItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastItem == null || lastItem.index >= listState.layoutInfo.totalItemsCount - 2
-        }
-    }
-
-    LaunchedEffect(isAtBottom) {
-        if (!isAtBottom && uiState.isGenerating) {
-            autoScrollEnabled = false
-        } else if (isAtBottom) {
-            autoScrollEnabled = true
+            val visibleItems = listState.layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) {
+                true
+            } else {
+                // In reverseLayout, index 0 is at the bottom.
+                visibleItems.any { it.index == 0 }
+            }
         }
     }
 
     LaunchedEffect(uiState.messages.size, uiState.partialGeneration) {
-        if (uiState.messages.isNotEmpty() && autoScrollEnabled) {
-            listState.animateScrollToItem(uiState.messages.size)
+        if (isAtBottom) {
+            listState.animateScrollToItem(0)
+        }
+    }
+
+    LaunchedEffect(isImeVisible) {
+        if (isImeVisible && uiState.messages.isNotEmpty()) {
+            kotlinx.coroutines.delay(200) // Wait for keyboard animation
+            listState.animateScrollToItem(0)
         }
     }
 
@@ -104,24 +116,11 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().clickable { showMenu = !showMenu }
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(DarkBackground)
-                        ) {
-                            val avatarModel = remember(uiState.character?.avatarImagePath) {
-                                ImageUtils.resolveModel(uiState.character?.avatarImagePath)
-                            }
-                            if (avatarModel != null) {
-                                AsyncImage(
-                                    model = avatarModel,
-                                    contentDescription = "Avatar",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                        }
+                        CharacterAvatar(
+                            name = uiState.character?.name ?: "Character",
+                            avatarPath = uiState.character?.avatarImagePath,
+                            size = 40.dp
+                        )
 
                         Spacer(modifier = Modifier.width(12.dp))
 
@@ -178,8 +177,7 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .background(DarkBackground)
-                    .navigationBarsPadding()
-                    .imePadding()
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 AnimatedVisibility(
@@ -293,24 +291,11 @@ fun ChatScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceCard)
-                    ) {
-                        val avatarModel = remember(uiState.character?.avatarImagePath) {
-                            ImageUtils.resolveModel(uiState.character?.avatarImagePath)
-                        }
-                        if (avatarModel != null) {
-                            AsyncImage(
-                                model = avatarModel,
-                                contentDescription = "Avatar",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
+                    CharacterAvatar(
+                        name = uiState.character?.name ?: "Character",
+                        avatarPath = uiState.character?.avatarImagePath,
+                        size = 100.dp // Changed to 100.dp to match original visual size, as 32.dp was too small for this context.
+                    )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Start Roleplaying with ${uiState.character?.name ?: ""}",
@@ -332,28 +317,9 @@ fun ChatScreen(
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
                     contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom),
+                    reverseLayout = true
                 ) {
-                    items(uiState.messages.size) { index ->
-                        val message = uiState.messages[index]
-                        val isUser = message.role == "user"
-                        val isPreviousSameRole = if (index > 0) uiState.messages[index - 1].role == message.role else false
-                        val isNextSameRole = if (index < uiState.messages.size - 1) uiState.messages[index + 1].role == message.role else false
-
-                        MessageBubble(
-                            message = message,
-                            isUser = isUser,
-                            isPreviousSameRole = isPreviousSameRole,
-                            isNextSameRole = isNextSameRole,
-                            avatarPath = if (isUser) uiState.activePersona?.avatarImagePath else uiState.character?.avatarImagePath,
-                            onRegenerate = { viewModel.regenerateLastMessage() },
-                            onDelete = { viewModel.deleteMessage(message) },
-                            onEdit = { newContent -> viewModel.editMessage(message, newContent) },
-                            fetchAlternatives = { groupId -> viewModel.getSwipeAlternatives(groupId) },
-                            onSwipeAlternative = { viewModel.switchSwipeAlternative(message.swipeGroupId!!, it) }
-                        )
-                    }
-
                     if (uiState.isGenerating) {
                         item {
                             if (uiState.partialGeneration.isNotEmpty()) {
@@ -378,6 +344,30 @@ fun ChatScreen(
                                 )
                             }
                         }
+                    }
+
+                    items(
+                        count = uiState.messages.size,
+                        key = { index -> uiState.messages[uiState.messages.size - 1 - index].id }
+                    ) { index ->
+                        val reversedIndex = uiState.messages.size - 1 - index
+                        val message = uiState.messages[reversedIndex]
+                        val isUser = message.role == "user"
+                        val isPreviousSameRole = if (reversedIndex > 0) uiState.messages[reversedIndex - 1].role == message.role else false
+                        val isNextSameRole = if (reversedIndex < uiState.messages.size - 1) uiState.messages[reversedIndex + 1].role == message.role else false
+
+                        MessageBubble(
+                            message = message,
+                            isUser = isUser,
+                            isPreviousSameRole = isPreviousSameRole,
+                            isNextSameRole = isNextSameRole,
+                            avatarPath = if (isUser) uiState.activePersona?.avatarImagePath else uiState.character?.avatarImagePath,
+                            onRegenerate = { viewModel.regenerateLastMessage() },
+                            onDelete = { viewModel.deleteMessage(message) },
+                            onEdit = { newContent -> viewModel.editMessage(message, newContent) },
+                            fetchAlternatives = { groupId -> viewModel.getSwipeAlternatives(groupId) },
+                            onSwipeAlternative = { viewModel.switchSwipeAlternative(message.swipeGroupId!!, it) }
+                        )
                     }
                 }
             }
@@ -485,6 +475,25 @@ fun ChatScreen(
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                     ListItem(
+                        headlineContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Memory Bank")
+                                if (uiState.memories.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Badge(containerColor = AccentColor, contentColor = Color.White) {
+                                        Text(uiState.memories.size.toString())
+                                    }
+                                }
+                            }
+                        },
+                        leadingContent = { Icon(Icons.Default.Book, contentDescription = null, tint = AccentColor) },
+                        modifier = Modifier.clickable {
+                            showMenu = false
+                            showMemoriesPanel = true
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    ListItem(
                         headlineContent = { Text("Extract Memory") },
                         leadingContent = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AccentColor) },
                         modifier = Modifier.clickable {
@@ -496,6 +505,20 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    if (showMemoriesPanel) {
+        MemoriesBottomSheet(
+            memories = uiState.memories,
+            onDismiss = { showMemoriesPanel = false },
+            onToggleMemory = viewModel::toggleMemory,
+            onPinMemory = viewModel::pinMemory,
+            onDeleteMemory = viewModel::deleteMemory,
+            onExtractNow = {
+                showMemoriesPanel = false
+                viewModel.extractMemory()
+            }
+        )
     }
 }
 
@@ -573,9 +596,7 @@ fun MessageBubble(
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onLongPress = {
-                                val haptic = androidx.compose.ui.platform.ViewConfiguration.get().longPressTimeoutMillis // workaround since local cannot be used in pointer input
-                                // Instead of relying on haptic here which is complex inside pointer input context,
-                                // we will just trigger the option. Context menu opening implies haptic in Android naturally or we can live without.
+                                // Trigger the options menu
                                 showOptions = true
                             }
                         )
@@ -819,5 +840,254 @@ fun ContextMenuItem(
         Icon(icon, contentDescription = null, tint = if (color == ErrorRed) color else AccentColor, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(12.dp))
         Text(text, color = color, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MemoriesBottomSheet(
+    memories: List<com.airoleplay.app.data.local.entity.MemoryEntity>,
+    onDismiss: () -> Unit,
+    onToggleMemory: (com.airoleplay.app.data.local.entity.MemoryEntity) -> Unit,
+    onPinMemory: (com.airoleplay.app.data.local.entity.MemoryEntity) -> Unit,
+    onDeleteMemory: (com.airoleplay.app.data.local.entity.MemoryEntity) -> Unit,
+    onExtractNow: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceCard,
+        contentColor = TextPrimary
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp, start = 16.dp, end = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Memory Bank", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                
+                Button(
+                    onClick = onExtractNow,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
+                ) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Extract Now")
+                }
+            }
+            
+            if (memories.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Text("No memories extracted yet.", color = TextSecondary)
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(memories.sortedByDescending { it.createdAt }) { memory ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(DarkBackground)
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = memory.content,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (memory.isActive) TextPrimary else TextSecondary,
+                                    fontStyle = if (memory.isActive) FontStyle.Normal else FontStyle.Italic
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (memory.isPinned) {
+                                        Icon(Icons.Default.PushPin, contentDescription = "Pinned", tint = AccentColor, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                    Text(
+                                        text = if (memory.isActive) "Active" else "Inactive",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (memory.isActive) SuccessGreen else TextSecondary
+                                    )
+                                }
+                            }
+                            
+                            // Actions
+                            Row {
+                                IconButton(onClick = { onPinMemory(memory) }) {
+                                    Icon(
+                                        Icons.Default.PushPin, 
+                                        contentDescription = "Pin", 
+                                        tint = if (memory.isPinned) AccentColor else TextSecondary
+                                    )
+                                }
+                                IconButton(onClick = { onToggleMemory(memory) }) {
+                                    Icon(
+                                        if (memory.isActive) Icons.Default.Visibility else Icons.Default.VisibilityOff, 
+                                        contentDescription = "Toggle Active", 
+                                        tint = if (memory.isActive) SuccessGreen else TextSecondary
+                                    )
+                                }
+                                IconButton(onClick = { onDeleteMemory(memory) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TypingIndicatorBubble(
+    avatarPath: String?,
+    isPreviousSameRole: Boolean
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        if (!isPreviousSameRole) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(SurfaceCard)
+            ) {
+                val avatarModel = remember(avatarPath) {
+                    ImageUtils.resolveModel(avatarPath)
+                }
+                if (avatarModel != null) {
+                    AsyncImage(
+                        model = avatarModel,
+                        contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        } else {
+            Spacer(modifier = Modifier.width(40.dp))
+        }
+
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp))
+                .background(AssistantBubbleColor)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val infiniteTransition = rememberInfiniteTransition(label = "typing")
+                val animations = listOf(0, 1, 2).map { index ->
+                    infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = keyframes {
+                                durationMillis = 600
+                                0.0f at 0 with LinearOutSlowInEasing
+                                1.0f at 200 with LinearOutSlowInEasing
+                                0.0f at 400 with LinearOutSlowInEasing
+                                0.0f at 600 with LinearOutSlowInEasing
+                            },
+                            repeatMode = RepeatMode.Restart,
+                            initialStartOffset = StartOffset(index * 150)
+                        ),
+                        label = "dot$index"
+                    )
+                }
+
+                animations.forEach { anim ->
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .graphicsLayer {
+                                translationY = -anim.value * 8f
+                                alpha = 0.5f + (anim.value * 0.5f)
+                            }
+                            .clip(CircleShape)
+                            .background(TextPrimary)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A basic markdown segments parser that handles bold (**), italic (*), and strikethrough (~~).
+ */
+fun parseMarkdown(text: String): androidx.compose.ui.text.AnnotatedString {
+    return buildAnnotatedString {
+        var i = 0
+        while (i < text.length) {
+            when {
+                text.startsWith("**", i) -> {
+                    val end = text.indexOf("**", i + 2)
+                    if (end != -1) {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append(text.substring(i + 2, end))
+                        }
+                        i = end + 2
+                    } else {
+                        append(text[i])
+                        i++
+                    }
+                }
+                text.startsWith("*", i) -> {
+                    val end = text.indexOf("*", i + 1)
+                    if (end != -1) {
+                        withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) {
+                            append(text.substring(i + 1, end))
+                        }
+                        i = end + 1
+                    } else {
+                        append(text[i])
+                        i++
+                    }
+                }
+                text.startsWith("~~", i) -> {
+                    val end = text.indexOf("~~", i + 2)
+                    if (end != -1) {
+                        withStyle(style = SpanStyle(textDecoration = TextDecoration.LineThrough)) {
+                            append(text.substring(i + 2, end))
+                        }
+                        i = end + 2
+                    } else {
+                        append(text[i])
+                        i++
+                    }
+                }
+                text.startsWith("`", i) -> {
+                    val end = text.indexOf("`", i + 1)
+                    if (end != -1) {
+                        withStyle(style = SpanStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, background = Color.Black.copy(alpha = 0.2f))) {
+                            append(text.substring(i + 1, end))
+                        }
+                        i = end + 1
+                    } else {
+                        append(text[i])
+                        i++
+                    }
+                }
+                else -> {
+                    append(text[i])
+                    i++
+                }
+            }
+        }
     }
 }

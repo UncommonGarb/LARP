@@ -11,10 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.airoleplay.app.ui.components.CharacterAvatar
 import com.airoleplay.app.data.local.entity.UserPersonaEntity
 import com.airoleplay.app.ui.theme.*
 
@@ -38,6 +36,7 @@ fun PersonaScreen(
 ) {
     val personas by viewModel.personas.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    var personaToEdit by remember { mutableStateOf<UserPersonaEntity?>(null) }
 
     Scaffold(
         containerColor = DarkBackground,
@@ -103,6 +102,7 @@ fun PersonaScreen(
                             persona = persona,
                             onActivate = { viewModel.setActivePersona(persona.id) },
                             onDelete = { viewModel.deletePersona(persona) },
+                            onEdit = { personaToEdit = persona },
                             canDelete = personas.size > 1
                         )
                     }
@@ -112,11 +112,28 @@ fun PersonaScreen(
 
     val context = androidx.compose.ui.platform.LocalContext.current
         if (showAddDialog) {
-            AddPersonaDialog(
+            PersonaDialog(
+                title = "Add Persona",
+                confirmText = "Add",
                 onDismiss = { showAddDialog = false },
-                onAdd = { name, desc, uri ->
-                viewModel.addPersona(context, name, desc, uri)
+                onConfirm = { name, desc, uri ->
+                    viewModel.addPersona(context, name, desc, uri)
                     showAddDialog = false
+                }
+            )
+        }
+
+        if (personaToEdit != null) {
+            PersonaDialog(
+                title = "Edit Persona",
+                confirmText = "Save",
+                initialName = personaToEdit!!.name,
+                initialDescription = personaToEdit!!.description,
+                initialAvatarPath = personaToEdit!!.avatarImagePath,
+                onDismiss = { personaToEdit = null },
+                onConfirm = { name, desc, uri ->
+                    viewModel.updatePersona(context, personaToEdit!!, name, desc, uri)
+                    personaToEdit = null
                 }
             )
         }
@@ -128,6 +145,7 @@ fun PersonaCard(
     persona: UserPersonaEntity,
     onActivate: () -> Unit,
     onDelete: () -> Unit,
+    onEdit: () -> Unit,
     canDelete: Boolean
 ) {
     Card(
@@ -143,31 +161,35 @@ fun PersonaCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(DarkBackground)
-            ) {
-                if (persona.avatarImagePath != null) {
-                    AsyncImage(
-                        model = persona.avatarImagePath,
-                        contentDescription = persona.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
+            CharacterAvatar(
+                name = persona.name,
+                avatarPath = persona.avatarImagePath,
+                size = 64.dp
+            )
 
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = persona.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = persona.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
                 if (persona.description.isNotBlank()) {
                     Text(
                         text = persona.description,
@@ -196,15 +218,20 @@ fun PersonaCard(
 }
 
 @Composable
-fun AddPersonaDialog(
+fun PersonaDialog(
+    title: String,
+    confirmText: String,
+    initialName: String = "",
+    initialDescription: String = "",
+    initialAvatarPath: String? = null,
     onDismiss: () -> Unit,
-    onAdd: (String, String, Uri?) -> Unit
+    onConfirm: (String, String, Uri?) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(initialName) }
+    var description by remember { mutableStateOf(initialDescription) }
     var avatarUri by remember { mutableStateOf<Uri?>(null) }
 
-    val imagePicker = rememberLauncherForActivityResult(
+    val imageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         avatarUri = uri
@@ -213,29 +240,18 @@ fun AddPersonaDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SurfaceCard,
-        title = { Text("Add Persona", color = TextPrimary) },
+        title = { Text(title, color = TextPrimary) },
         text = {
             Column {
-                Box(
+                CharacterAvatar(
+                    name = "New Persona",
+                    avatarPath = avatarUri?.toString() ?: initialAvatarPath,
                     modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(DarkBackground)
+                        .size(100.dp)
                         .align(Alignment.CenterHorizontally)
-                        .clickable { imagePicker.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (avatarUri != null) {
-                        AsyncImage(
-                            model = avatarUri,
-                            contentDescription = "Avatar",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(Icons.Default.Add, contentDescription = "Add Avatar", tint = TextSecondary)
-                    }
-                }
+                        .clickable { imageLauncher.launch("image/*") },
+                    size = 100.dp
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = name,
@@ -271,10 +287,10 @@ fun AddPersonaDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onAdd(name, description, avatarUri) },
+                onClick = { onConfirm(name, description, avatarUri) },
                 enabled = name.isNotBlank()
             ) {
-                Text("Add", color = AccentColor)
+                Text(confirmText, color = AccentColor)
             }
         },
         dismissButton = {

@@ -11,9 +11,11 @@ import com.airoleplay.app.data.local.entity.CharacterEntity
 import com.airoleplay.app.data.local.entity.ChatMessageEntity
 import com.airoleplay.app.data.local.entity.ChatSessionEntity
 import com.airoleplay.app.data.local.entity.UserPersonaEntity
+import com.airoleplay.app.data.local.entity.MemoryEntity
+import com.airoleplay.app.data.local.entity.GlobalSettingsEntity
+import com.airoleplay.app.data.local.entity.LorebookEntryEntity
 import com.airoleplay.app.data.remote.models.GenerationSettings
 import com.airoleplay.app.di.NetworkModule
-import com.airoleplay.app.data.local.entity.LorebookEntryEntity
 import com.airoleplay.app.domain.prompt.InstructFormat
 import com.airoleplay.app.domain.prompt.PromptBuilder
 import com.google.gson.Gson
@@ -22,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import javax.inject.Inject
 
@@ -35,7 +38,8 @@ data class ChatUiState(
     val activePersona: UserPersonaEntity? = null,
     val connectionStatus: ConnectionStatus = ConnectionStatus.UNKNOWN,
     val currentContextTokens: Int = 0,
-    val maxContextTokens: Int = 4096
+    val maxContextTokens: Int = 4096,
+    val memories: List<MemoryEntity> = emptyList()
 )
 
 enum class ConnectionStatus {
@@ -63,12 +67,16 @@ class ChatViewModel @Inject constructor(
     // Default Generation Settings (will be overridable per session later)
     var currentGenSettings = GenerationSettings()
 
+    // Cached global settings for fallback
+    private var cachedGlobalSettings: GlobalSettingsEntity? = null
+
     init {
         if (sessionId != -1L) {
             loadChatData()
         }
         observeActiveConnection()
         observeActivePersona()
+        observeGlobalSettings()
         startConnectionPolling()
     }
 
@@ -96,6 +104,29 @@ class ChatViewModel @Inject constructor(
                 characterDao.getCharacterById(session.characterId).firstOrNull()?.let { char ->
                     _uiState.update { it.copy(character = char) }
                 }
+                // Load memories for this session
+                observeMemories(session.characterId)
+            }
+        }
+    }
+
+    private fun observeMemories(characterId: Long) {
+        viewModelScope.launch {
+            chatDao.getMemoriesForSession(sessionId).collect { memories ->
+                _uiState.update { it.copy(memories = memories) }
+            }
+        }
+    }
+
+    private fun observeGlobalSettings() {
+        viewModelScope.launch {
+            settingsDao.getGlobalSettings().collect { settings ->
+                cachedGlobalSettings = settings
+                // Re-apply generation settings if the active connection doesn't use custom
+                val conn = _uiState.value.activeConnection
+                if (conn != null && !conn.useCustomSettings && settings != null) {
+                    applyGlobalSettings(settings, conn)
+                }
             }
         }
     }
@@ -104,20 +135,50 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             settingsDao.getActiveConnection().collect { conn ->
                 _uiState.update { it.copy(activeConnection = conn) }
-                // Set default generation settings based on connection
+                // Set generation settings based on connection or global defaults
                 conn?.let {
-                    currentGenSettings = currentGenSettings.copy(
-                        model = it.modelName,
-                        temperature = it.temperature,
-                        topP = it.topP,
-                        topK = it.topK,
-                        repetitionPenalty = it.repetitionPenalty,
-                        maxNewTokens = it.maxNewTokens
-                    )
+                    if (it.useCustomSettings) {
+                        // Use per-connection gen params
+                        currentGenSettings = currentGenSettings.copy(
+                            model = it.modelName,
+                            temperature = it.temperature,
+                            topP = it.topP,
+                            topK = it.topK,
+                            repetitionPenalty = it.repetitionPenalty,
+                            maxNewTokens = it.maxNewTokens
+                        )
+                    } else {
+                        // Use global defaults, falling back to connection values only for model name
+                        val global = cachedGlobalSettings
+                        if (global != null) {
+                            applyGlobalSettings(global, it)
+                        } else {
+                            // Fallback: use connection values until globals load
+                            currentGenSettings = currentGenSettings.copy(
+                                model = it.modelName,
+                                temperature = it.temperature,
+                                topP = it.topP,
+                                topK = it.topK,
+                                repetitionPenalty = it.repetitionPenalty,
+                                maxNewTokens = it.maxNewTokens
+                            )
+                        }
+                    }
                 }
                 checkConnectionStatus()
             }
         }
+    }
+
+    private fun applyGlobalSettings(global: GlobalSettingsEntity, conn: BackendConnectionEntity) {
+        currentGenSettings = currentGenSettings.copy(
+            model = conn.modelName,
+            temperature = global.defaultTemperature,
+            topP = global.defaultTopP,
+            topK = global.defaultTopK,
+            repetitionPenalty = global.defaultRepetitionPenalty,
+            maxNewTokens = global.defaultMaxNewTokens
+        )
     }
 
     private fun observeActivePersona() {
@@ -132,10 +193,21 @@ class ChatViewModel @Inject constructor(
         val conn = _uiState.value.activeConnection ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(connectionStatus = ConnectionStatus.CONNECTING) }
-            val api = NetworkModule.createBackendAPI(conn.type, conn.baseUrl, okHttpClient, gson)
-            val result = api.testConnection()
-            _uiState.update {
-                it.copy(connectionStatus = if (result.isSuccessful) ConnectionStatus.CONNECTED else ConnectionStatus.DISCONNECTED)
+            try {
+                val api = NetworkModule.createBackendAPI(conn.type, conn.baseUrl, okHttpClient, gson)
+                val result = api.testConnection()
+                if (result.isSuccessful) {
+                    _uiState.update { it.copy(connectionStatus = ConnectionStatus.CONNECTED) }
+                    // Fetch and apply context size from backend
+                    val backendContextSize = api.getContextSizeLimit()
+                    if (backendContextSize > 0) {
+                        _uiState.update { it.copy(maxContextTokens = backendContextSize) }
+                    }
+                } else {
+                    _uiState.update { it.copy(connectionStatus = ConnectionStatus.DISCONNECTED) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(connectionStatus = ConnectionStatus.DISCONNECTED) }
             }
         }
     }
@@ -159,11 +231,9 @@ class ChatViewModel @Inject constructor(
             }
 
             // 3. Trigger Generation
-            // Ensure we fetch the most up-to-date messages including the one we just inserted before building prompt
-            val latestMessages = chatDao.getMessagesForSession(sessionId).firstOrNull() ?: emptyList()
-            _uiState.update { it.copy(messages = latestMessages) }
-
-            generateAIResponse()
+            // Fetch explicit latest list to avoid race conditions with state updates
+            val latestMessages = chatDao.getMessagesForSession(sessionId).first()
+            generateAIResponse(latestMessages = latestMessages)
         }
     }
 
@@ -171,16 +241,18 @@ class ChatViewModel @Inject constructor(
         if (_uiState.value.isGenerating) return
 
         viewModelScope.launch(Dispatchers.IO) {
-            val msgs = _uiState.value.messages
+            val msgs = chatDao.getMessagesForSession(sessionId).first()
             if (msgs.isEmpty()) return@launch
 
             val lastMsg = msgs.last()
             if (lastMsg.role == "assistant") {
                 // Deactivate current last message
                 chatDao.deactivateMessage(lastMsg.id)
-                generateAIResponse(lastMsg.swipeGroupId)
+                // Fetch again to get the clean list without the deactivated message
+                val cleanMessages = chatDao.getMessagesForSession(sessionId).first()
+                generateAIResponse(swipeGroupId = lastMsg.swipeGroupId, latestMessages = cleanMessages)
             } else {
-                generateAIResponse()
+                generateAIResponse(latestMessages = msgs)
             }
         }
     }
@@ -206,7 +278,10 @@ class ChatViewModel @Inject constructor(
         alternativesCache.remove(groupId)
     }
 
-    private suspend fun generateAIResponse(swipeGroupId: String? = null) {
+    private suspend fun generateAIResponse(
+        swipeGroupId: String? = null,
+        latestMessages: List<ChatMessageEntity>? = null
+    ) {
         val state = _uiState.value
         val char = state.character ?: return
         val conn = state.activeConnection
@@ -241,7 +316,20 @@ class ChatViewModel @Inject constructor(
                 "**$personaName:**", "\n**$personaName**"
             )
 
-            _uiState.update { it.copy(maxContextTokens = conn.contextSizeLimit) }
+            // Determine context size based on connection custom vs. global vs. backend
+            // Prefer backend-sourced value if we just connected, otherwise follow settings
+            var contextSize = if (conn.useCustomSettings) {
+                conn.contextSizeLimit
+            } else {
+                globalSettings?.defaultContextSizeLimit ?: conn.contextSizeLimit
+            }
+
+            // Sync with UI state which might have been updated from backend
+            if (_uiState.value.maxContextTokens != 4096 && _uiState.value.maxContextTokens != contextSize) {
+                contextSize = _uiState.value.maxContextTokens
+            }
+            
+            _uiState.update { it.copy(maxContextTokens = contextSize) }
 
             // Add format specific stop sequences
             if (conn.type.uppercase() == "KOBOLDCPP") {
@@ -262,11 +350,11 @@ class ChatViewModel @Inject constructor(
                 character = char,
                 persona = state.activePersona,
                 globalSystemPrompt = globalPrompt,
-                messages = state.messages,
+                messages = latestMessages ?: state.messages,
                 lorebookEntries = lorebooks,
                 authorsNote = char.authorsNote,
                 authorsNoteDepth = char.authorsNoteDepth,
-                contextSizeLimit = conn.contextSizeLimit
+                contextSizeLimit = contextSize
             )
 
             // If Kobold, we need flat string
@@ -287,19 +375,25 @@ class ChatViewModel @Inject constructor(
             }
             _uiState.update { it.copy(currentContextTokens = estimatedTokens) }
 
-            // Start Flow
+            // Start Flow — STREAMING FIX: use StringBuilder and flowOn(Default) for responsive UI updates
             generationJob = viewModelScope.launch(Dispatchers.IO) {
                 try {
                     val flow = api.generateResponse(promptString, requestMessages, currentGenSettings)
 
-                    var fullResponse = ""
-                    flow.collect { chunk ->
-                        fullResponse += chunk
-                        _uiState.update { it.copy(partialGeneration = fullResponse) }
-                    }
+                    val responseBuilder = StringBuilder()
+                    flow
+                        .flowOn(Dispatchers.IO) // Ensure collection happens on IO
+                        .collect { chunk ->
+                            responseBuilder.append(chunk)
+                            val currentText = responseBuilder.toString()
+                            // Update on Main dispatcher for immediate UI recomposition
+                            withContext(Dispatchers.Main) {
+                                _uiState.update { it.copy(partialGeneration = currentText) }
+                            }
+                        }
 
                     // Done streaming, save to DB
-                    finalizeGeneration(fullResponse, swipeGroupId)
+                    finalizeGeneration(responseBuilder.toString(), swipeGroupId)
 
                 } catch (e: Exception) {
                     // Save whatever we got so far, plus error if needed
@@ -321,14 +415,28 @@ class ChatViewModel @Inject constructor(
     }
 
     private suspend fun finalizeGeneration(finalText: String, swipeGroupId: String? = null) {
-        if (finalText.isNotBlank()) {
+        var processedText = finalText.trim()
+        
+        // Optional: Remove unfinished sentence
+        if (cachedGlobalSettings?.trimIncompleteSentences == true && processedText.isNotEmpty()) {
+            val lastPunctuation = processedText.lastIndexOfAny(charArrayOf('.', '!', '?', '"', '*', ')'))
+            if (lastPunctuation != -1 && lastPunctuation < processedText.length - 1) {
+                // Check if the remaining text is alphanumeric (i.e., a cut-off word/sentence)
+                val remaining = processedText.substring(lastPunctuation + 1)
+                if (remaining.any { it.isLetterOrDigit() }) {
+                    processedText = processedText.substring(0, lastPunctuation + 1)
+                }
+            }
+        }
+
+        if (processedText.isNotBlank()) {
             // Check if we are regenerating, if so, we reuse the group ID, otherwise we create a new one
             val groupToUse = swipeGroupId ?: java.util.UUID.randomUUID().toString()
 
             val aiMsg = ChatMessageEntity(
                 sessionId = sessionId,
                 role = "assistant",
-                content = finalText.trim(),
+                content = processedText,
                 swipeGroupId = groupToUse
             )
             chatDao.insertMessage(aiMsg)
@@ -338,7 +446,7 @@ class ChatViewModel @Inject constructor(
             // Wait for DB to update and Flow to emit before clearing partial
             // This prevents the visual "pop"
             chatDao.getMessagesForSession(sessionId).first { msgs ->
-                msgs.any { it.swipeGroupId == groupToUse && it.content.trim() == finalText.trim() }
+                msgs.any { it.swipeGroupId == groupToUse && it.content.trim() == processedText.trim() }
             }
         }
         _uiState.update { it.copy(isGenerating = false, partialGeneration = "") }
@@ -375,6 +483,33 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    // --- Memory Bank ---
+
+    fun toggleMemory(memory: MemoryEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            chatDao.updateMemory(memory.copy(isActive = !memory.isActive))
+        }
+    }
+
+    fun pinMemory(memory: MemoryEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            chatDao.updateMemory(memory.copy(isPinned = !memory.isPinned))
+        }
+    }
+
+    fun deleteMemory(memory: MemoryEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            chatDao.deleteMemory(memory)
+        }
+    }
+
+    fun editMemory(memory: MemoryEntity, newContent: String) {
+        if (newContent.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            chatDao.updateMemory(memory.copy(content = newContent))
+        }
+    }
+
     fun extractMemory() {
         if (_uiState.value.isGenerating) return
 
@@ -398,7 +533,7 @@ class ChatViewModel @Inject constructor(
                 val personaName = state.activePersona?.name ?: "User"
                 val conversationText = recentMessages.joinToString("\n") { "${if (it.role == "user") personaName else char.name}: ${it.content}" }
 
-                val promptStr = "Analyze the following conversation and extract ONLY the new, important factual information about the characters (like relationships, birthdays, locations, specific past events mentioned). Format each fact as a bullet point. Do not include opinions or summaries, only facts.\n\nConversation:\n$conversationText\n\nFacts:"
+                val promptStr = "Analyze the following conversation and extract ONLY the new, important factual information about the characters (like relationships, birthdays, locations, specific past events mentioned). Format each fact as a bullet point starting with '- '. Do not include opinions or summaries, only facts.\n\nConversation:\n$conversationText\n\nFacts:"
 
                 val promptMessage = com.airoleplay.app.data.remote.models.PromptMessage(role = "user", content = promptStr)
 
@@ -407,36 +542,60 @@ class ChatViewModel @Inject constructor(
 
                 if (conn.type.uppercase() == "KOBOLDCPP") {
                     val format = InstructFormat.valueOf(conn.instructFormat.uppercase().replace(" ", ""))
-                    rawPromptStr = com.airoleplay.app.domain.prompt.InstructFormatter.format(requestMessages, format)
+                    rawPromptStr = com.airoleplay.app.domain.prompt.InstructFormatter.format(requestMessages!!, format)
                 }
 
                 val settings = currentGenSettings.copy(maxNewTokens = 300, temperature = 0.3f, stopSequences = listOf("<|im_end|>", "<|eot_id|>", "Conversation:"))
                 val flow = api.generateResponse(rawPromptStr, requestMessages, settings)
 
-                var memoryResult = ""
+                val memoryResult = StringBuilder()
                 flow.collect { chunk ->
-                    memoryResult += chunk
+                    memoryResult.append(chunk)
                 }
 
-                if (memoryResult.isNotBlank()) {
-                    // Save as a constant Lorebook entry
-                    val titleText = "Auto-Memory (${java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()).format(java.util.Date())})"
-                    val entry = LorebookEntryEntity(
-                        characterId = char.id,
-                        title = titleText,
-                        keywords = "memory, auto",
-                        content = memoryResult.trim(),
-                        isConstant = true
-                    )
-                    settingsDao.insertLorebookEntry(entry)
+                val resultText = memoryResult.toString().trim()
+                if (resultText.isNotBlank()) {
+                    // Parse bullet points into individual memories
+                    val bullets = resultText.lines()
+                        .map { it.trim() }
+                        .filter { it.startsWith("- ") || it.startsWith("• ") || it.startsWith("* ") }
+                        .map { it.removePrefix("- ").removePrefix("• ").removePrefix("* ").trim() }
+                        .filter { it.isNotBlank() }
 
-                    // Add a system message to chat to notify the user
-                     val systemMsg = ChatMessageEntity(
-                        sessionId = sessionId,
-                        role = "assistant",
-                        content = "[Memory Extracted & Saved to Lorebook]\n$memoryResult"
-                    )
-                    chatDao.insertMessage(systemMsg)
+                    if (bullets.isNotEmpty()) {
+                        bullets.forEach { fact ->
+                            chatDao.insertMemory(
+                                MemoryEntity(
+                                    sessionId = sessionId,
+                                    characterId = char.id,
+                                    content = fact
+                                )
+                            )
+                        }
+
+                        // Add a system message to chat to notify the user
+                        val systemMsg = ChatMessageEntity(
+                            sessionId = sessionId,
+                            role = "assistant",
+                            content = "[Memory Extracted — ${bullets.size} facts saved]\n${bullets.joinToString("\n") { "• $it" }}"
+                        )
+                        chatDao.insertMessage(systemMsg)
+                    } else {
+                        // Fallback: save the whole thing as one memory if no bullet format detected
+                        chatDao.insertMemory(
+                            MemoryEntity(
+                                sessionId = sessionId,
+                                characterId = char.id,
+                                content = resultText
+                            )
+                        )
+                        val systemMsg = ChatMessageEntity(
+                            sessionId = sessionId,
+                            role = "assistant",
+                            content = "[Memory Extracted & Saved]\n$resultText"
+                        )
+                        chatDao.insertMessage(systemMsg)
+                    }
                 }
 
             } catch (e: Exception) {

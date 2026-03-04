@@ -17,5 +17,6 @@ data class BackendConnectionEntity(
     val contextSizeLimit: Int = 4096,
     val maxNewTokens: Int = 400,
     val isActive: Boolean = false,
-    val instructFormat: String = "ChatML"
+    val instructFormat: String = "ChatML",
+    val useCustomSettings: Boolean = false // When false, inherits from GlobalSettingsEntity defaults
 )
