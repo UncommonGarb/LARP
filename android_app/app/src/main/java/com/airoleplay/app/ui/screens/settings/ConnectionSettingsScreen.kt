@@ -20,6 +20,7 @@ import androidx.navigation.NavController
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.airoleplay.app.domain.prompt.InstructFormat
 import com.airoleplay.app.ui.theme.*
+import androidx.compose.animation.AnimatedVisibility
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -189,6 +190,74 @@ fun ConnectionSettingsScreen(
                             }
                         )
                     }
+                }
+            }
+
+            // Custom Generation Settings Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Use Custom Generation Settings", color = TextPrimary, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = if (state.useCustomSettings) "Overrides global defaults" else "Using global defaults",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Switch(
+                    checked = state.useCustomSettings,
+                    onCheckedChange = { isChecked -> viewModel.updateField(useCustomSettings = isChecked) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = AccentColor
+                    )
+                )
+            }
+
+            // Per-connection gen params (only shown when custom settings is on)
+            AnimatedVisibility(visible = state.useCustomSettings) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    GenSlider(
+                        label = "Temperature",
+                        value = state.temperature,
+                        range = 0f..2f,
+                        steps = 39,
+                        onValueChange = { viewModel.updateField(temperature = it) }
+                    )
+                    GenSlider(
+                        label = "Top-P",
+                        value = state.topP,
+                        range = 0f..1f,
+                        steps = 19,
+                        onValueChange = { viewModel.updateField(topP = it) }
+                    )
+                    GenSlider(
+                        label = "Repetition Penalty",
+                        value = state.repetitionPenalty,
+                        range = 1f..2f,
+                        steps = 19,
+                        onValueChange = { viewModel.updateField(repetitionPenalty = it) }
+                    )
+                    GenNumberField(
+                        label = "Max New Tokens",
+                        value = state.maxNewTokens,
+                        onValueChange = { viewModel.updateField(maxNewTokens = it) }
+                    )
+                    GenNumberField(
+                        label = "Context Size Limit",
+                        value = state.contextSizeLimit,
+                        onValueChange = { viewModel.updateField(contextSizeLimit = it) }
+                    )
+                    GenNumberField(
+                        label = "Top-K",
+                        value = state.topK,
+                        onValueChange = { viewModel.updateField(topK = it) }
+                    )
                 }
             }
 

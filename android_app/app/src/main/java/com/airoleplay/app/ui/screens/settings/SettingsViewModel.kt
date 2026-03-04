@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.airoleplay.app.data.local.dao.SettingsDao
 import com.airoleplay.app.data.local.entity.BackendConnectionEntity
 import com.airoleplay.app.data.local.entity.UserPersonaEntity
+import com.airoleplay.app.data.local.entity.GlobalSettingsEntity
 import com.airoleplay.app.di.NetworkModule
 import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,6 +31,9 @@ class SettingsViewModel @Inject constructor(
 
     val backendConnections: StateFlow<List<BackendConnectionEntity>> = settingsDao.getAllConnections()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val globalSettings: StateFlow<GlobalSettingsEntity?> = settingsDao.getGlobalSettings()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _testResult = MutableStateFlow<String?>(null)
     val testResult = _testResult.asStateFlow()
@@ -63,6 +67,36 @@ class SettingsViewModel @Inject constructor(
             all.find { it.id == connectionId }?.let { conn ->
                 settingsDao.updateConnection(conn.copy(isActive = true))
             }
+        }
+    }
+
+    fun updateGlobalSystemPrompt(newPrompt: String) {
+        viewModelScope.launch {
+            val currentSettings = globalSettings.value ?: GlobalSettingsEntity()
+            settingsDao.insertGlobalSettings(currentSettings.copy(globalSystemPrompt = newPrompt))
+        }
+    }
+
+    fun updateGlobalGenSettings(
+        temperature: Float? = null,
+        topP: Float? = null,
+        topK: Int? = null,
+        repetitionPenalty: Float? = null,
+        maxNewTokens: Int? = null,
+        contextSizeLimit: Int? = null
+    ) {
+        viewModelScope.launch {
+            val current = globalSettings.value ?: GlobalSettingsEntity()
+            settingsDao.insertGlobalSettings(
+                current.copy(
+                    defaultTemperature = temperature ?: current.defaultTemperature,
+                    defaultTopP = topP ?: current.defaultTopP,
+                    defaultTopK = topK ?: current.defaultTopK,
+                    defaultRepetitionPenalty = repetitionPenalty ?: current.defaultRepetitionPenalty,
+                    defaultMaxNewTokens = maxNewTokens ?: current.defaultMaxNewTokens,
+                    defaultContextSizeLimit = contextSizeLimit ?: current.defaultContextSizeLimit
+                )
+            )
         }
     }
 }

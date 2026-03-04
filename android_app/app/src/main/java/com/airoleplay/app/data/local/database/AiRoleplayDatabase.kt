@@ -15,6 +15,8 @@ import com.airoleplay.app.data.local.entity.ChatMessageEntity
 import com.airoleplay.app.data.local.entity.ChatSessionEntity
 import com.airoleplay.app.data.local.entity.LorebookEntryEntity
 import com.airoleplay.app.data.local.entity.UserPersonaEntity
+import com.airoleplay.app.data.local.entity.GlobalSettingsEntity
+import com.airoleplay.app.data.local.entity.MemoryEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,9 +28,11 @@ import kotlinx.coroutines.launch
         ChatMessageEntity::class,
         LorebookEntryEntity::class,
         UserPersonaEntity::class,
-        BackendConnectionEntity::class
+        BackendConnectionEntity::class,
+        GlobalSettingsEntity::class,
+        MemoryEntity::class
     ],
-    version = 3,
+    version = 10,
     exportSchema = false
 )
 abstract class AiRoleplayDatabase : RoomDatabase() {
@@ -47,6 +51,76 @@ abstract class AiRoleplayDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `global_settings` (`id` INTEGER NOT NULL, `globalSystemPrompt` TEXT NOT NULL, PRIMARY KEY(`id`))")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN isError INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Add generation params to global_settings
+                db.execSQL("ALTER TABLE global_settings ADD COLUMN defaultTemperature REAL NOT NULL DEFAULT 0.8")
+                db.execSQL("ALTER TABLE global_settings ADD COLUMN defaultTopP REAL NOT NULL DEFAULT 0.9")
+                db.execSQL("ALTER TABLE global_settings ADD COLUMN defaultTopK INTEGER NOT NULL DEFAULT 40")
+                db.execSQL("ALTER TABLE global_settings ADD COLUMN defaultRepetitionPenalty REAL NOT NULL DEFAULT 1.1")
+                db.execSQL("ALTER TABLE global_settings ADD COLUMN defaultMaxNewTokens INTEGER NOT NULL DEFAULT 400")
+                db.execSQL("ALTER TABLE global_settings ADD COLUMN defaultContextSizeLimit INTEGER NOT NULL DEFAULT 4096")
+
+                // 2. Add useCustomSettings to backend_connections
+                db.execSQL("ALTER TABLE backend_connections ADD COLUMN useCustomSettings INTEGER NOT NULL DEFAULT 0")
+
+                // 3. Create memories table
+                db.execSQL("""CREATE TABLE IF NOT EXISTS `memories` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `sessionId` INTEGER NOT NULL,
+                    `characterId` INTEGER NOT NULL,
+                    `content` TEXT NOT NULL,
+                    `isPinned` INTEGER NOT NULL DEFAULT 0,
+                    `isActive` INTEGER NOT NULL DEFAULT 1,
+                    `createdAt` INTEGER NOT NULL,
+                    FOREIGN KEY(`sessionId`) REFERENCES `chat_sessions`(`id`) ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_memories_sessionId` ON `memories` (`sessionId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_memories_characterId` ON `memories` (`characterId`)")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE global_settings ADD COLUMN trimIncompleteSentences INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE lorebook_entries ADD COLUMN category TEXT NOT NULL DEFAULT 'GENERAL'")
+                db.execSQL("ALTER TABLE lorebook_entries ADD COLUMN metadataJson TEXT")
+                db.execSQL("ALTER TABLE lorebook_entries ADD COLUMN lastTriggeredAt INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN burnPacing TEXT NOT NULL DEFAULT 'REALISTIC'")
+                db.execSQL("ALTER TABLE characters ADD COLUMN autonomyLevel INTEGER NOT NULL DEFAULT 50")
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN speechPatterns TEXT")
+                db.execSQL("ALTER TABLE characters ADD COLUMN fearsFlaws TEXT")
+                db.execSQL("ALTER TABLE characters ADD COLUMN likesDislikes TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): AiRoleplayDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -54,7 +128,7 @@ abstract class AiRoleplayDatabase : RoomDatabase() {
                     AiRoleplayDatabase::class.java,
                     "ai_roleplay_database"
                 )
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .addCallback(DatabaseCallback(context))
                 .fallbackToDestructiveMigration()
                 .build()
@@ -79,6 +153,9 @@ abstract class AiRoleplayDatabase : RoomDatabase() {
         suspend fun prePopulateDatabase(db: AiRoleplayDatabase) {
             val characterDao = db.characterDao()
             val settingsDao = db.settingsDao()
+
+            // Default global settings
+            settingsDao.insertGlobalSettings(com.airoleplay.app.data.local.entity.GlobalSettingsEntity())
 
             // Check if there are any personas, if not add a default "User" persona
             if (settingsDao.getPersonaCount() == 0) {

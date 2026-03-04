@@ -1,0 +1,57 @@
+# Gradle files
+.gradle/
+build/
+/*/build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log Files
+*.log
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/shelf/
+.idea/tasks.xml
+.idea/assetWizardSettings.xml
+.idea/navEditor.xml
+.idea/deploymentTargetSelector.xml
+
+# VS Code
+.vscode/
+
+# Captured Screenshots / Videos
+/captures/
+
+# Keystores / Secrets
+*.jks
+*.keystore
+*.p12
+*.key
+google-services.json
+
+# External Native Build
+.externalNativeBuild
+.cxx
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles/
+Makefile
+rules.ninja
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Misc
+.temp/
+/tmp/
+*.swp
+*.bak

@@ -11,11 +11,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -30,7 +32,10 @@ fun LorebookScreen(
     viewModel: LorebookViewModel = hiltViewModel()
 ) {
     val entries by viewModel.entries.collectAsState()
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+
+    val categories = listOf("PEOPLE", "PLACES", "GENERAL")
 
     Scaffold(
         containerColor = DarkBackground,
@@ -51,40 +56,73 @@ fun LorebookScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (entries.isEmpty()) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        Text("No lorebook entries for this character.", color = TextSecondary)
-                    }
+        Column(modifier = Modifier.padding(padding)) {
+            TabRow(
+                selectedTabIndex = categories.indexOf(selectedCategory),
+                containerColor = DarkBackground,
+                contentColor = AccentColor,
+                indicator = { tabPositions ->
+                    TabRowDefaults.Indicator(
+                        Modifier.tabIndicatorOffset(tabPositions[categories.indexOf(selectedCategory)]),
+                        color = AccentColor
+                    )
+                }
+            ) {
+                categories.forEach { category ->
+                    Tab(
+                        selected = selectedCategory == category,
+                        onClick = { viewModel.setCategory(category) },
+                        text = {
+                            Text(
+                                category.lowercase().replaceFirstChar { it.uppercase() },
+                                color = if (selectedCategory == category) AccentColor else TextSecondary
+                            )
+                        }
+                    )
                 }
             }
 
-            items(entries) { entry ->
-                LorebookEntryCard(
-                    entry = entry,
-                    onDelete = { viewModel.deleteLorebookEntry(entry) }
-                )
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (entries.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No $selectedCategory entries found.", color = TextSecondary)
+                        }
+                    }
+                }
+
+                items(entries) { entry ->
+                    LorebookEntryCard(
+                        entry = entry,
+                        onDelete = { viewModel.deleteLorebookEntry(entry) }
+                    )
+                }
             }
         }
     }
 
     if (showAddDialog) {
         LorebookEntryDialog(
+            initialCategory = selectedCategory,
             onDismiss = { showAddDialog = false },
-            onSave = { title, keywords, content ->
+            onSave = { title, keywords, content, cat, metadata ->
                 viewModel.addLorebookEntry(
                     LorebookEntryEntity(
                         characterId = characterId,
                         title = title,
                         keywords = keywords,
-                        content = content
+                        content = content,
+                        category = cat,
+                        metadataJson = metadata
                     )
                 )
                 showAddDialog = false
@@ -121,10 +159,30 @@ fun LorebookEntryCard(entry: LorebookEntryEntity, onDelete: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LorebookEntryDialog(onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
+fun LorebookEntryDialog(
+    initialCategory: String = "GENERAL",
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, String, String?) -> Unit
+) {
     var title by remember { mutableStateOf("") }
     var keywords by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf(initialCategory) }
+    
+    // Specialized Fields (shared across categories but contextually assigned)
+    var age by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
+    var personality by remember { mutableStateOf("") }
+    var appearance by remember { mutableStateOf("") }
+    var occupation by remember { mutableStateOf("") }
+    var relationship by remember { mutableStateOf("") }
+    
+    var placeType by remember { mutableStateOf("") }
+    var atmosphere by remember { mutableStateOf("") }
+    var notableNpcs by remember { mutableStateOf("") }
+    var worldHistory by remember { mutableStateOf("") }
+
+    val categories = listOf("PEOPLE", "PLACES", "GENERAL")
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -132,10 +190,30 @@ fun LorebookEntryDialog(onDismiss: () -> Unit, onSave: (String, String, String) 
         title = { Text("Add Lorebook Entry", color = TextPrimary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Category Selector
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    categories.forEach { cat ->
+                        FilterChip(
+                            selected = category == cat,
+                            onClick = { category = cat },
+                            label = { Text(cat.lowercase().replaceFirstChar { it.uppercase() }) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AccentColor,
+                                selectedLabelColor = Color.White,
+                                labelColor = TextSecondary
+                            )
+                        )
+                    }
+                }
+
                 TextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("Title") },
+                    modifier = Modifier.fillMaxWidth(),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = DarkBackground,
                         unfocusedContainerColor = DarkBackground,
@@ -147,6 +225,7 @@ fun LorebookEntryDialog(onDismiss: () -> Unit, onSave: (String, String, String) 
                     value = keywords,
                     onValueChange = { keywords = it },
                     label = { Text("Keywords (comma separated)") },
+                    modifier = Modifier.fillMaxWidth(),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = DarkBackground,
                         unfocusedContainerColor = DarkBackground,
@@ -154,11 +233,40 @@ fun LorebookEntryDialog(onDismiss: () -> Unit, onSave: (String, String, String) 
                         unfocusedTextColor = TextPrimary
                     )
                 )
+
+                // Category-specific fields
+                when (category) {
+                    "PEOPLE" -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LorebookTextField(age, { age = it }, "Age", Modifier.weight(1f))
+                            LorebookTextField(gender, { gender = it }, "Gender", Modifier.weight(1f))
+                        }
+                        LorebookTextField(occupation, { occupation = it }, "Occupation")
+                        LorebookTextField(personality, { personality = it }, "Personality Traits")
+                        LorebookTextField(appearance, { appearance = it }, "Appearance Details")
+                        LorebookTextField(relationship, { relationship = it }, "Relationship to Character")
+                    }
+                    "PLACES" -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LorebookTextField(placeType, { placeType = it }, "Type (e.g. City, Tavern)", Modifier.weight(1f))
+                            LorebookTextField(atmosphere, { atmosphere = it }, "Atmosphere", Modifier.weight(1f))
+                        }
+                        LorebookTextField(notableNpcs, { notableNpcs = it }, "Notable NPCs")
+                        LorebookTextField(worldHistory, { worldHistory = it }, "History/Lore", minHeight = 100.dp)
+                    }
+                    "GENERAL" -> {
+                         // General just uses the main content box mostly, but we could add a "Significance" field
+                        LorebookTextField(worldHistory, { worldHistory = it }, "Significance/Notes", minHeight = 100.dp)
+                    }
+                }
+
                 TextField(
                     value = content,
                     onValueChange = { content = it },
-                    label = { Text("Content") },
-                    modifier = Modifier.height(150.dp),
+                    label = { Text("Description / Summary") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = DarkBackground,
                         unfocusedContainerColor = DarkBackground,
@@ -170,7 +278,16 @@ fun LorebookEntryDialog(onDismiss: () -> Unit, onSave: (String, String, String) 
         },
         confirmButton = {
             TextButton(
-                onClick = { if (title.isNotBlank() && content.isNotBlank()) onSave(title, keywords, content) },
+                onClick = { 
+                    if (title.isNotBlank() && content.isNotBlank()) {
+                        val metadata = when (category) {
+                            "PEOPLE" -> """{"age":"$age","gender":"$gender","personality":"$personality","appearance":"$appearance","occupation":"$occupation","relationship":"$relationship"}"""
+                            "PLACES" -> """{"type":"$placeType","atmosphere":"$atmosphere","npcs":"$notableNpcs","history":"$worldHistory"}"""
+                            else -> if (worldHistory.isNotBlank()) """{"notes":"$worldHistory"}""" else null
+                        }
+                        onSave(title, keywords, content, category, metadata)
+                    }
+                },
                 enabled = title.isNotBlank() && content.isNotBlank()
             ) {
                 Text("Save", color = AccentColor)
@@ -181,5 +298,29 @@ fun LorebookEntryDialog(onDismiss: () -> Unit, onSave: (String, String, String) 
                 Text("Cancel", color = TextSecondary)
             }
         }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LorebookTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    minHeight: Dp = Dp.Unspecified
+) {
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+        modifier = modifier.fillMaxWidth().let { if (minHeight != Dp.Unspecified) it.height(minHeight) else it },
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = DarkBackground,
+            unfocusedContainerColor = DarkBackground,
+            focusedTextColor = TextPrimary,
+            unfocusedTextColor = TextPrimary
+        ),
+        textStyle = MaterialTheme.typography.bodyMedium
     )
 }

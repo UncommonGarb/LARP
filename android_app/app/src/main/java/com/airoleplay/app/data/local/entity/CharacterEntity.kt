@@ -18,5 +18,10 @@ data class CharacterEntity(
     val tags: String, // Comma separated tags
     val authorsNote: String? = null,
     val authorsNoteDepth: Int = 2,
+    val burnPacing: String = "REALISTIC", // SLOW, REALISTIC, FAST, INSTANT
+    val autonomyLevel: Int = 50, // 0 to 100
+    val speechPatterns: String? = null,
+    val fearsFlaws: String? = null,
+    val likesDislikes: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

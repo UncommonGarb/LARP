@@ -8,6 +8,7 @@ import androidx.room.Update
 import androidx.room.Delete
 import com.airoleplay.app.data.local.entity.ChatMessageEntity
 import com.airoleplay.app.data.local.entity.ChatSessionEntity
+import com.airoleplay.app.data.local.entity.MemoryEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -39,6 +40,9 @@ interface ChatDao {
     @Delete
     suspend fun deleteMessage(message: ChatMessageEntity)
 
+    @Query("DELETE FROM chat_messages WHERE sessionId = :sessionId AND id >= :messageId")
+    suspend fun deleteMessagesFromId(sessionId: Long, messageId: Long)
+
     @Query("UPDATE chat_messages SET isActive = 0 WHERE id = :messageId")
     suspend fun deactivateMessage(messageId: Long)
 
@@ -50,4 +54,21 @@ interface ChatDao {
 
     @Query("UPDATE chat_messages SET isActive = 1 WHERE id = :messageId")
     suspend fun activateMessage(messageId: Long)
+
+    // Memory Bank queries
+    @Query("SELECT * FROM memories WHERE sessionId = :sessionId ORDER BY createdAt DESC")
+    fun getMemoriesForSession(sessionId: Long): Flow<List<MemoryEntity>>
+
+    @Query("SELECT * FROM memories WHERE characterId = :characterId AND isActive = 1 ORDER BY createdAt DESC")
+    fun getActiveMemoriesForCharacter(characterId: Long): Flow<List<MemoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMemory(memory: MemoryEntity): Long
+
+    @Update
+    suspend fun updateMemory(memory: MemoryEntity)
+
+    @Delete
+    suspend fun deleteMemory(memory: MemoryEntity)
 }
+

@@ -51,7 +51,7 @@ fun OnboardingScreen(
             when (step) {
                 1 -> {
                     Text(
-                        text = "Welcome to AI Roleplay",
+                        text = "Welcome to LARP",
                         style = MaterialTheme.typography.headlineMedium,
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,

@@ -62,7 +62,14 @@ class ConnectionSettingsViewModel @Inject constructor(
         baseUrl: String = _connectionState.value.baseUrl,
         modelName: String? = _connectionState.value.modelName,
         instructFormat: String = _connectionState.value.instructFormat,
-        isActive: Boolean = _connectionState.value.isActive
+        isActive: Boolean = _connectionState.value.isActive,
+        useCustomSettings: Boolean = _connectionState.value.useCustomSettings,
+        temperature: Float = _connectionState.value.temperature,
+        topP: Float = _connectionState.value.topP,
+        topK: Int = _connectionState.value.topK,
+        repetitionPenalty: Float = _connectionState.value.repetitionPenalty,
+        maxNewTokens: Int = _connectionState.value.maxNewTokens,
+        contextSizeLimit: Int = _connectionState.value.contextSizeLimit
     ) {
         _connectionState.value = _connectionState.value.copy(
             name = name,
@@ -70,7 +77,14 @@ class ConnectionSettingsViewModel @Inject constructor(
             baseUrl = baseUrl,
             modelName = modelName,
             instructFormat = instructFormat,
-            isActive = isActive
+            isActive = isActive,
+            useCustomSettings = useCustomSettings,
+            temperature = temperature,
+            topP = topP,
+            topK = topK,
+            repetitionPenalty = repetitionPenalty,
+            maxNewTokens = maxNewTokens,
+            contextSizeLimit = contextSizeLimit
         )
     }
 

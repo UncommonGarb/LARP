@@ -66,4 +66,11 @@ interface SettingsDao {
 
     @Delete
     suspend fun deleteLorebookEntry(entry: LorebookEntryEntity)
+
+    // Global Settings
+    @Query("SELECT * FROM global_settings WHERE id = 1")
+    fun getGlobalSettings(): Flow<com.airoleplay.app.data.local.entity.GlobalSettingsEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGlobalSettings(settings: com.airoleplay.app.data.local.entity.GlobalSettingsEntity)
 }

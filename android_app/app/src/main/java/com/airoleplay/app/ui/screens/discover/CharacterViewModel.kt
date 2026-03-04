@@ -8,6 +8,7 @@ import com.airoleplay.app.data.local.dao.SettingsDao
 import com.airoleplay.app.data.local.entity.CharacterEntity
 import com.airoleplay.app.data.local.entity.ChatSessionEntity
 import com.airoleplay.app.data.local.entity.UserPersonaEntity
+import com.airoleplay.app.domain.character.CharacterImporter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,7 +24,8 @@ import javax.inject.Inject
 class CharacterViewModel @Inject constructor(
     private val characterDao: CharacterDao,
     private val chatDao: ChatDao,
-    private val settingsDao: SettingsDao
+    private val settingsDao: SettingsDao,
+    private val characterImporter: CharacterImporter
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -78,5 +80,19 @@ class CharacterViewModel @Inject constructor(
 
     fun selectTag(tag: String) {
         _selectedTag.value = tag
+    }
+
+    // Exposed for UI result observation
+    private val _importResult = MutableStateFlow<Result<Long>?>(null)
+    val importResult = _importResult.asStateFlow()
+
+    fun importCharacter(uri: android.net.Uri) {
+        viewModelScope.launch {
+            _importResult.value = characterImporter.importCharacter(uri)
+        }
+    }
+
+    fun clearImportResult() {
+        _importResult.value = null
     }
 }
