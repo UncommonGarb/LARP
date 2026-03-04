@@ -90,7 +90,7 @@ fun SettingsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "build:a0.01",
+                        text = "build:a0.02",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary.copy(alpha = 0.5f),
                         modifier = Modifier.padding(vertical = 32.dp)

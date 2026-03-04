@@ -470,6 +470,12 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun deleteMessagesFrom(message: ChatMessageEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            chatDao.deleteMessagesFromId(sessionId, message.id)
+        }
+    }
+
     fun editMessage(message: ChatMessageEntity, newContent: String) {
         if (newContent.isBlank()) return
         viewModelScope.launch(Dispatchers.IO) {

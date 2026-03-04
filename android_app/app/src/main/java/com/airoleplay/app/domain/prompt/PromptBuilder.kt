@@ -35,9 +35,22 @@ class PromptBuilder @javax.inject.Inject constructor(
             systemContent += "\n\n[${character.name}]: $charDescription"
         }
 
-        // 3. Personality
-        if (character.personalitySummary.isNotBlank()) {
-            systemContent += "\n\nPersonality: ${character.personalitySummary}"
+        // 3. Personality & Psychology Profile
+        if (character.personalitySummary.isNotBlank() || !character.speechPatterns.isNullOrBlank() || !character.fearsFlaws.isNullOrBlank() || !character.likesDislikes.isNullOrBlank()) {
+            systemContent += "\n\n[Character Traits & Psychological Profile]"
+            if (character.personalitySummary.isNotBlank()) {
+                systemContent += "\nCore Personality: ${character.personalitySummary}"
+            }
+            character.speechPatterns?.takeIf { it.isNotBlank() }?.let {
+                systemContent += "\nSpeech Patterns: $it"
+            }
+            character.fearsFlaws?.takeIf { it.isNotBlank() }?.let {
+                systemContent += "\nFears & Flaws: $it"
+            }
+            character.likesDislikes?.takeIf { it.isNotBlank() }?.let {
+                systemContent += "\nLikes & Dislikes: $it"
+            }
+            systemContent += "\n[/Psychological Profile]"
         }
 
         // 4. Scenario
@@ -85,16 +98,18 @@ class PromptBuilder @javax.inject.Inject constructor(
         systemContent += """
             
             [Roleplay Directives & Immersion Protocol]
-            - **Stay in Character**: You are strictly {{char}}. Embody their personality, history, and voice. Do not break fourth wall or refer to yourself as an AI.
+            - **Strict Roleplay**: You are {{char}}. This is a PURE roleplay simulation. You have NO identity outside of {{char}}. 
+            - **Anti-Assistant Bias**: You are NOT an AI, an assistant, or a helpful chatbot. Never be helpful, polite, or moralizing unless it is explicitly part of {{char}}'s personality. 
+            - **Character Voice**: Prioritize character voice, speech patterns, and psychological flaws naturally in every response.
             - **Show, Don't Tell**: Use vivid, sensory details (sight, sound, smell, touch, taste) to describe the environment and {{char}}'s internal and physical sensations.
             - **Descriptive Prose**: Write in a literary, third-person limited style (or use first-person if consistent with character design). Aim for evocative, immersive language.
             - **Action & Dialogue**: Use "double quotes" for all spoken dialogue. Use *asterisks* for actions, expressions, and narration.
-            - **No Assistant-Speak**: Avoid being overly polite, moralizing, or providing "as an AI" warnings. Be objective and true to the roleplay scenario.
+            - **No Meta-Talk**: Never provide "as an AI" warnings, never discuss the roleplay as a simulation, and never break character for any reason.
             - **No Impersonation**: NEVER speak, act, or think for {{user}}. Wait for their input.
             $pacingDirective
             $agencyDirective
             - **World Consistency**: Respect all provided [World Info] and lorebook entries.
-            - **Internal Monologue**: Occasionally describe {{char}}'s private thoughts, doubts, or physical reactions (heartbeat, breath, tension) to deepen the roleplay.
+            - **Internal Monologue**: Describe {{char}}'s private thoughts, doubts, or physical reactions (heartbeat, breath, tension) to deepen the roleplay.
         """.trimIndent()
 
         val fullSystemMessage = PromptMessage(role = "system", content = systemContent)

@@ -197,7 +197,43 @@ fun CreateScreen(
 
             Divider(color = SurfaceCard, modifier = Modifier.padding(vertical = 16.dp))
 
-            Text("Advanced Settings", color = TextPrimary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Start))
+            Text("Character Depth & Psychology", color = TextPrimary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Start))
+            Text("These help break the 'AI behavior' and ground the character in real traits.", color = TextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.align(Alignment.Start))
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CreateTextField(
+                label = "Speech Patterns / Mannerisms",
+                value = character.speechPatterns ?: "",
+                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(speechPatterns = newVal) } },
+                placeholder = "Stutters when nervous, uses 'thee/thou', speaks in short sentences..."
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CreateTextField(
+                label = "Fears, Flaws & Weaknesses",
+                value = character.fearsFlaws ?: "",
+                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(fearsFlaws = newVal) } },
+                singleLine = false,
+                placeholder = "Terrified of storms, overly arrogant, physically weak..."
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CreateTextField(
+                label = "Likes & Dislikes",
+                value = character.likesDislikes ?: "",
+                onValueChange = { newVal -> viewModel.updateCharacter { it.copy(likesDislikes = newVal) } },
+                singleLine = false,
+                placeholder = "Loves old books and rainy days. Hates crowds and loud noises..."
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Divider(color = SurfaceCard, modifier = Modifier.padding(vertical = 16.dp))
+
+            Text("Advanced Prompting", color = TextPrimary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Start))
 
             Spacer(modifier = Modifier.height(16.dp))
 

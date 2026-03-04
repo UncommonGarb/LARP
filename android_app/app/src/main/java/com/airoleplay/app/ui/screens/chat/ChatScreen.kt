@@ -333,6 +333,7 @@ fun ChatScreen(
                                     isPreviousSameRole = uiState.messages.lastOrNull()?.role == "assistant",
                                     isNextSameRole = false,
                                     avatarPath = uiState.character?.avatarImagePath,
+                                    characterName = uiState.character?.name ?: "Character",
                                     isStreaming = true,
                                     onRegenerate = { },
                                     onDelete = { }
@@ -340,6 +341,7 @@ fun ChatScreen(
                             } else {
                                 TypingIndicatorBubble(
                                     avatarPath = uiState.character?.avatarImagePath,
+                                    characterName = uiState.character?.name ?: "Character",
                                     isPreviousSameRole = uiState.messages.lastOrNull()?.role == "assistant"
                                 )
                             }
@@ -362,8 +364,10 @@ fun ChatScreen(
                             isPreviousSameRole = isPreviousSameRole,
                             isNextSameRole = isNextSameRole,
                             avatarPath = if (isUser) uiState.activePersona?.avatarImagePath else uiState.character?.avatarImagePath,
+                            characterName = if (isUser) uiState.activePersona?.name ?: "User" else uiState.character?.name ?: "Character",
                             onRegenerate = { viewModel.regenerateLastMessage() },
                             onDelete = { viewModel.deleteMessage(message) },
+                            onDeleteToHere = { viewModel.deleteMessagesFrom(message) },
                             onEdit = { newContent -> viewModel.editMessage(message, newContent) },
                             fetchAlternatives = { groupId -> viewModel.getSwipeAlternatives(groupId) },
                             onSwipeAlternative = { viewModel.switchSwipeAlternative(message.swipeGroupId!!, it) }
@@ -384,7 +388,7 @@ fun ChatScreen(
                 FloatingActionButton(
                     onClick = {
                         scope.launch {
-                            listState.animateScrollToItem(uiState.messages.size)
+                            listState.animateScrollToItem(0)
                         }
                     },
                     containerColor = SurfaceCard,
@@ -529,9 +533,11 @@ fun MessageBubble(
     isPreviousSameRole: Boolean = false,
     isNextSameRole: Boolean = false,
     avatarPath: String?,
+    characterName: String,
     isStreaming: Boolean = false,
     onRegenerate: () -> Unit,
     onDelete: () -> Unit,
+    onDeleteToHere: () -> Unit = {},
     onEdit: (String) -> Unit = {},
     fetchAlternatives: suspend (String) -> List<ChatMessageEntity> = { emptyList() },
     onSwipeAlternative: (Long) -> Unit = {}
@@ -552,24 +558,11 @@ fun MessageBubble(
     ) {
         if (!isUser) {
             if (!isNextSameRole) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(SurfaceCard)
-                ) {
-                    val avatarModel = remember(avatarPath) {
-                        ImageUtils.resolveModel(avatarPath)
-                    }
-                    if (avatarModel != null) {
-                        AsyncImage(
-                            model = avatarModel,
-                            contentDescription = "Avatar",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
+                CharacterAvatar(
+                    name = characterName,
+                    avatarPath = avatarPath,
+                    size = 32.dp
+                )
             } else {
                 Spacer(modifier = Modifier.size(32.dp))
             }
@@ -794,6 +787,12 @@ fun MessageBubble(
                         }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed)
                         }
+                        IconButton(onClick = {
+                            showOptions = false
+                            onDeleteToHere()
+                        }) {
+                            Icon(Icons.Default.DeleteSweep, contentDescription = "Delete to here", tint = ErrorRed)
+                        }
                     }
                 }
             }
@@ -801,24 +800,11 @@ fun MessageBubble(
 
         if (isUser) {
             Spacer(modifier = Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceCard)
-            ) {
-                val avatarModel = remember(avatarPath) {
-                    ImageUtils.resolveModel(avatarPath)
-                }
-                if (avatarModel != null) {
-                    AsyncImage(
-                        model = avatarModel,
-                        contentDescription = "User Avatar",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
+            CharacterAvatar(
+                name = characterName,
+                avatarPath = avatarPath,
+                size = 32.dp
+            )
         }
     }
 }
@@ -947,6 +933,7 @@ fun MemoriesBottomSheet(
 @Composable
 fun TypingIndicatorBubble(
     avatarPath: String?,
+    characterName: String,
     isPreviousSameRole: Boolean
 ) {
     Row(
@@ -957,24 +944,11 @@ fun TypingIndicatorBubble(
         verticalAlignment = Alignment.Bottom
     ) {
         if (!isPreviousSameRole) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceCard)
-            ) {
-                val avatarModel = remember(avatarPath) {
-                    ImageUtils.resolveModel(avatarPath)
-                }
-                if (avatarModel != null) {
-                    AsyncImage(
-                        model = avatarModel,
-                        contentDescription = "Avatar",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
+            CharacterAvatar(
+                name = characterName,
+                avatarPath = avatarPath,
+                size = 32.dp
+            )
             Spacer(modifier = Modifier.width(8.dp))
         } else {
             Spacer(modifier = Modifier.width(40.dp))
